@@ -93,7 +93,10 @@
     if(!unlocked)finishUnlock();
     else{
       closeGate();
-      if(changed&&typeof toast==='function')toast(`Spiller som ${person}`);
+      if(changed){
+        window.dispatchEvent(new CustomEvent('obd-player-changed',{detail:{player:person}}));
+        if(typeof toast==='function')toast(`Spiller som ${person}`);
+      }
     }
   }
 
