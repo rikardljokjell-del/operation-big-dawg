@@ -7,15 +7,54 @@
   <title>Operation Big Dawg</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="battle.css">
+  <link rel="stylesheet" href="auth.css">
 </head>
 <body>
+  <div id="accessGate" class="access-gate show" role="dialog" aria-modal="true" aria-label="Tilgang til Operation Big Dawg">
+    <div class="access-card">
+      <button id="gateClose" class="gate-close" type="button" aria-label="Lukk karaktervelger" hidden>×</button>
+      <div class="access-logo">🐺</div>
+      <span class="access-kicker">OPERATION BIG DAWG</span>
+
+      <div id="pinStep" class="access-step">
+        <h1>ENTER THE DEN</h1>
+        <p>PIN kreves på denne enheten før treningsloggen åpnes.</p>
+        <form id="pinForm" class="pin-form">
+          <input id="pinInput" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="PIN" aria-label="PIN">
+          <button id="pinSubmit" class="access-primary" type="submit">Lås opp</button>
+        </form>
+        <div id="pinError" class="pin-error" aria-live="polite"></div>
+      </div>
+
+      <div id="playerStep" class="access-step" hidden>
+        <h1>VELG KARAKTER</h1>
+        <p>Valget huskes i denne nettleseren. Du kan bytte når som helst øverst.</p>
+        <div class="player-choices">
+          <button class="player-choice adrian-choice" type="button" data-choose-player="Adrian">
+            <span class="choice-img"><img src="characters/adrian-1.png" alt="Adrian" draggable="false"></span>
+            <strong>ADRIAN</strong><small>Velg fighter</small>
+          </button>
+          <button class="player-choice rikard-choice" type="button" data-choose-player="Rikard">
+            <span class="choice-img"><img src="characters/rikard-1.png" alt="Rikard" draggable="false"></span>
+            <strong>RIKARD</strong><small>Velg fighter</small>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <main class="app-shell">
     <header class="appbar">
       <a class="brand" href="#home" aria-label="Operation Big Dawg hjem">
         <span class="brand-mark">🐺</span>
         <span><small>OPERATION</small><strong>BIG DAWG</strong></span>
       </a>
-      <div id="status" class="status">Kobler til…</div>
+      <div class="appbar-tools">
+        <button id="playerSwitch" class="player-switch" type="button" aria-label="Velg karakter">
+          <small>SPILLER SOM</small><strong id="selectedPlayerLabel">VELG</strong>
+        </button>
+        <div id="status" class="status">Kobler til…</div>
+      </div>
     </header>
 
     <section id="battleSummary" class="battle-summary" aria-label="Weekly Battle sammendrag">
@@ -181,6 +220,7 @@
 
   <script src="core.js"></script>
   <script src="characters.js"></script>
+  <script src="auth.js"></script>
   <script src="ui.js"></script>
   <script src="battle.js"></script>
 </body>
