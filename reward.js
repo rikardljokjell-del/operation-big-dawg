@@ -1,7 +1,7 @@
 (()=>{
   const el=id=>document.getElementById(id);
   const osloWeekday=()=>new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Oslo',weekday:'short'}).format(new Date());
-  const hasWorkoutToday=person=>{const today=ymd(new Date());return rows.some(r=>r.person===person&&ymd(r.created_at)===today)};
+  const hasWorkoutToday=person=>{const today=ymd(new Date());return rowsForPlayer(person).some(r=>ymd(r.created_at)===today)};
 
   function renderRewardEngine(){
     try{
