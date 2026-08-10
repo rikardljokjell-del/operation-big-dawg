@@ -127,7 +127,7 @@ function maybeShowNewBadge(){const n=new Set(badgeList());if(lastBadgeSet.size){
 function closeEvolution(){clearTimeout(evoTimer);$('evoOverlay').classList.remove('show')}
 function showEvolution(person,from,to){levelSound();$('evoTitle').textContent=`${person} is evolving…`;$('evoOld').innerHTML=fig(person,from,true);$('evoNew').innerHTML=fig(person,to,true);$('evoOld').classList.add('evolving');$('evoNew').classList.add('flash');$('evoText').textContent=`${person} evolved into Level ${to}: ${RANKS[to-1]}`;$('evoOverlay').classList.add('show');setTimeout(()=>{$('evoOld').classList.remove('evolving');$('evoNew').classList.remove('flash');$('evoTitle').textContent='Evolution complete!';$('evoText').textContent=`${person} is now ${RANKS[to-1]}`;evoTimer=setTimeout(closeEvolution,5000)},1700)}
 
-function render(){renderHero();renderPeople();renderEvolution();renderWeek();renderHeat();renderForm();renderHistory();renderBadges()}
+function render(){if(typeof window.renderRewardEngine==='function')window.renderRewardEngine();renderHero();renderPeople();renderEvolution();renderWeek();renderHeat();renderForm();renderHistory();renderBadges()}
 
 async function refresh(silent=true){try{rows=await call({action:'list'});render();if(lastBadgeSet.size===0)lastBadgeSet=new Set(badgeList());$('status').textContent='● Tilkoblet';if(!silent)toast('Oppdatert')}catch(e){$('status').textContent='Kunne ikke koble til';if(!silent)toast(e.message)}}
 
@@ -136,14 +136,15 @@ async function addWorkout(person,type){
   try{const c=ensureAudio();if(c.state==='suspended')c.resume()}catch{}
   const label=type==='strength'?'styrke':'kondis';
   if(!confirm(`Registrere ${label} for ${person} nå?`))return;
-  const before=levelInfo(person).level;
+  const beforeInfo=levelInfo(person),beforeDays=uniqueDays(person,currentWeek()),opponent=PEOPLE.find(p=>p!==person),opponentDays=uniqueDays(opponent,currentWeek());
   setBusy(true);
   try{
     await call({action:'add',person,workout_type:type});
     await refresh(true);
-    const after=levelInfo(person).level;
+    const afterInfo=levelInfo(person),afterDays=uniqueDays(person,currentWeek()),xpDelta=afterInfo.rawXp-beforeInfo.rawXp,tookLead=beforeDays<=opponentDays&&afterDays>opponentDays;
     toast('Økt registrert');
-    if(after>before){showEvolution(person,before,after);setTimeout(maybeShowNewBadge,1900)}else maybeShowNewBadge();
+    window.dispatchEvent(new CustomEvent('obd-workout-added',{detail:{person,type,xpDelta,levelBefore:beforeInfo.level,levelAfter:afterInfo.level,afterInLevel:afterInfo.inLevel,rank:afterInfo.rank,xpToNext:afterInfo.level===10?0:10-afterInfo.inLevel,tookLead,newTrainingDay:afterDays>beforeDays}}));
+    if(afterInfo.level>beforeInfo.level){setTimeout(()=>showEvolution(person,beforeInfo.level,afterInfo.level),1450);setTimeout(maybeShowNewBadge,8300)}else setTimeout(maybeShowNewBadge,1500);
   }catch(e){toast(e.message)}finally{setBusy(false)}
 }
 
