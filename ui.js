@@ -38,6 +38,7 @@ function renderPeople(){
   PEOPLE.forEach(p=>$('person'+p).innerHTML=personCard(p));
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>addWorkout(b.dataset.person,b.dataset.add));
   document.querySelectorAll('[data-undo]').forEach(b=>b.onclick=()=>undoWorkout(b.dataset.undo));
+  if(typeof window.applySelectedControls==='function')window.applySelectedControls();
 }
 
 function renderEvolution(){PEOPLE.forEach(p=>$('evolution'+p).innerHTML=evolutionCard(p))}
