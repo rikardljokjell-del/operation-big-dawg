@@ -88,6 +88,80 @@
     payoffTimer=setTimeout(()=>wrap.classList.remove('show'),1350);
   }
 
+  let confirmResolver=null;
+  function ensureConfirmUi(){
+    let wrap=el('obdConfirm');
+    if(wrap)return wrap;
+    wrap=document.createElement('div');
+    wrap.id='obdConfirm';
+    wrap.className='obd-confirm';
+    wrap.setAttribute('aria-hidden','true');
+    wrap.innerHTML=`<div class="obd-confirm-backdrop" data-confirm-cancel></div><div class="obd-confirm-card" role="dialog" aria-modal="true" aria-labelledby="obdConfirmTitle" aria-describedby="obdConfirmText"><div id="obdConfirmIcon" class="obd-confirm-icon">💪</div><div id="obdConfirmKicker" class="obd-confirm-kicker">LOCK IT IN</div><div id="obdConfirmTitle" class="obd-confirm-title">Registrer økt?</div><div id="obdConfirmText" class="obd-confirm-text"></div><div class="obd-confirm-actions"><button type="button" class="obd-confirm-btn secondary" data-confirm-cancel>Avbryt</button><button id="obdConfirmOk" type="button" class="obd-confirm-btn primary" data-confirm-ok>Registrer</button></div></div>`;
+    document.body.appendChild(wrap);
+    wrap.addEventListener('click',e=>{
+      if(e.target.closest('[data-confirm-cancel]'))closeConfirm(false);
+      else if(e.target.closest('[data-confirm-ok]'))closeConfirm(true);
+    });
+    return wrap;
+  }
+
+  function closeConfirm(result){
+    const wrap=el('obdConfirm');
+    if(!wrap||!wrap.classList.contains('show'))return;
+    wrap.classList.remove('show');
+    wrap.setAttribute('aria-hidden','true');
+    document.body.classList.remove('obd-modal-open');
+    const resolve=confirmResolver;
+    confirmResolver=null;
+    if(resolve)resolve(result);
+  }
+
+  function openConfirm({kind='strength',person='Rikard'}={}){
+    const wrap=ensureConfirmUi();
+    if(confirmResolver)closeConfirm(false);
+    const isUndo=kind==='undo';
+    const isCardio=kind==='cardio';
+    wrap.dataset.kind=kind;
+    el('obdConfirmIcon').textContent=isUndo?'↶':isCardio?'⚡':'💪';
+    el('obdConfirmKicker').textContent=isUndo?'ANGRE SISTE ØKT':isCardio?'KONDIS':'STYRKE';
+    el('obdConfirmTitle').textContent=isUndo?'Fjerne siste økt?':`Registrer ${isCardio?'kondis':'styrke'}?`;
+    el('obdConfirmText').textContent=isUndo?`Siste registrerte økt for ${person} blir fjernet.`:`Legg inn ${isCardio?'kondis':'styrke'} for ${person} nå.`;
+    el('obdConfirmOk').textContent=isUndo?'Angre økt':'Registrer';
+    wrap.classList.add('show');
+    wrap.setAttribute('aria-hidden','false');
+    document.body.classList.add('obd-modal-open');
+    setTimeout(()=>el('obdConfirmOk')?.focus(),80);
+    return new Promise(resolve=>{confirmResolver=resolve});
+  }
+
+  function callWithoutNativeConfirm(fn){
+    const original=window.confirm;
+    window.confirm=()=>true;
+    try{return fn()}finally{window.confirm=original}
+  }
+
+  document.addEventListener('click',e=>{
+    const button=e.target.closest?.('[data-add],[data-undo]');
+    if(!button)return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const isAdd=button.hasAttribute('data-add');
+    const person=isAdd?button.dataset.person:button.dataset.undo;
+    const kind=isAdd?button.dataset.add:'undo';
+    openConfirm({kind,person}).then(ok=>{
+      if(!ok)return;
+      if(isAdd)callWithoutNativeConfirm(()=>window.addWorkout?.(person,kind));
+      else callWithoutNativeConfirm(()=>window.undoWorkout?.(person));
+    });
+  },true);
+
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&el('obdConfirm')?.classList.contains('show')){
+      e.preventDefault();
+      closeConfirm(false);
+    }
+  });
+
   window.renderRewardEngine=renderRewardEngine;
   window.addEventListener('obd-workout-added',e=>showWorkoutPayoff(e.detail||{}));
   window.addEventListener('obd-player-changed',renderRewardEngine);
