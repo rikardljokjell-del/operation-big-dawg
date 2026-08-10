@@ -1,6 +1,6 @@
 # Operation Big Dawg
 
-Workout tracker for Rikard and Adrian.
+Workout motivational game tracker. EPIC characters
 
 ## Deployment workflow
 
