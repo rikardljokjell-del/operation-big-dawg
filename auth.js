@@ -1,6 +1,7 @@
 (()=>{
   const PIN_KEY='obd_access_pin_v1';
   const PLAYER_KEY='obd_selected_player_v1';
+  const APP_PIN='1337';
   let memoryPin='';
   let memoryPlayer='';
   let selectedPlayer='';
@@ -12,6 +13,7 @@
 
   selectedPlayer=PEOPLE.includes(readStore(PLAYER_KEY))?readStore(PLAYER_KEY):'';
   window.getSelectedPlayer=()=>selectedPlayer;
+  window.obdAuthReady=false;
 
   const baseCall=call;
   call=window.call=async function(payload,pinOverride){
@@ -34,7 +36,8 @@
     playerStep.hidden=true;
     gateClose.hidden=true;
     pinError.textContent=message;
-    setTimeout(()=>pinInput.focus(),50);
+    pinInput.disabled=false;
+    requestAnimationFrame(()=>pinInput.focus());
   }
 
   function showPlayerPicker(){
@@ -50,10 +53,13 @@
   }
 
   function finishUnlock(){
+    if(unlocked)return;
     unlocked=true;
+    window.obdAuthReady=true;
+    document.body.classList.add('auth-ready');
     updatePlayerUi();
     closeGate();
-    setTimeout(()=>{if(typeof refresh==='function')refresh(true)},0);
+    window.dispatchEvent(new Event('obd-auth-ready'));
   }
 
   function choosePlayer(person){
@@ -89,24 +95,20 @@
     });
   }
 
-  pinForm.addEventListener('submit',async e=>{
+  pinForm.addEventListener('submit',e=>{
     e.preventDefault();
     const pin=pinInput.value.trim();
-    if(!pin)return;
-    pinError.textContent='Sjekker PIN…';
-    pinInput.disabled=true;
-    try{
-      await call({action:'auth'},pin);
-      writeStore(PIN_KEY,pin);
-      pinInput.value='';
-      pinError.textContent='';
-      if(selectedPlayer)finishUnlock();
-      else showPlayerPicker();
-    }catch{
+    if(pin!==APP_PIN){
       removeStore(PIN_KEY);
       pinError.textContent='Feil PIN.';
       pinInput.select();
-    }finally{pinInput.disabled=false}
+      return;
+    }
+    writeStore(PIN_KEY,pin);
+    pinInput.value='';
+    pinError.textContent='';
+    if(selectedPlayer)finishUnlock();
+    else showPlayerPicker();
   });
 
   document.querySelectorAll('[data-choose-player]').forEach(btn=>btn.addEventListener('click',()=>choosePlayer(btn.dataset.choosePlayer)));
@@ -117,23 +119,23 @@
     const btn=e.target.closest('[data-add],[data-undo]');
     if(!btn)return;
     const person=btn.dataset.person||btn.dataset.undo;
-    if(person&&person!==selectedPlayer){e.preventDefault();e.stopImmediatePropagation();if(typeof toast==='function')toast(`Bytt til ${person} øverst først`) }
+    if(person&&person!==selectedPlayer){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if(typeof toast==='function')toast(`Bytt til ${person} øverst først`);
+    }
   },true);
 
   const fighters=$('fighters');
   if(fighters)new MutationObserver(applySelectedControls).observe(fighters,{childList:true,subtree:true});
   updatePlayerUi();
 
-  (async()=>{
-    const pin=readStore(PIN_KEY);
-    if(!pin){showPin();return}
-    try{
-      await call({action:'auth'},pin);
-      if(selectedPlayer)finishUnlock();
-      else showPlayerPicker();
-    }catch{
-      removeStore(PIN_KEY);
-      showPin('PIN må bekreftes på nytt.');
-    }
-  })();
+  const storedPin=readStore(PIN_KEY);
+  if(storedPin===APP_PIN){
+    if(selectedPlayer)finishUnlock();
+    else showPlayerPicker();
+  }else{
+    removeStore(PIN_KEY);
+    showPin();
+  }
 })();
