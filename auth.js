@@ -2,11 +2,14 @@
   const PIN_KEY='obd_access_pin_v1';
   const LEGACY_PLAYER_KEY='obd_selected_player_v1';
   const PLAYER_ID_KEY='obd_selected_player_id_v2';
+  const VERIFIED_PLAYER_KEY='obd_verified_player_id_v1';
   const APP_PIN='1337';
   const NAME_RE=/^[\p{L}\p{N}][\p{L}\p{N} .'-]{0,39}$/u;
   let memoryStore={};
   let players=[];
   let selectedPlayer=null;
+  let pendingPlayer=null;
+  let loginVerifiedIds=new Set();
   let unlocked=false;
   let compatPromise=null;
 
@@ -29,12 +32,15 @@
     return baseCall({...payload,pin});
   };
 
-  const gate=$('accessGate'),pinStep=$('pinStep'),playerStep=$('playerStep'),pinForm=$('pinForm'),pinInput=$('pinInput'),pinError=$('pinError'),gateClose=$('gateClose'),switchBtn=$('playerSwitch'),label=$('selectedPlayerLabel');
+  const gate=$('accessGate'),pinStep=$('pinStep'),playerStep=$('playerStep'),pinForm=$('pinForm'),pinInput=$('pinInput'),pinError=$('pinError'),pinSubmit=$('pinSubmit'),gateClose=$('gateClose'),switchBtn=$('playerSwitch'),label=$('selectedPlayerLabel');
 
   function buildPlayerGate(){
+    const pinText=pinStep?.querySelector('p');
+    if(pinText)pinText.textContent='Bruk master-PIN eller PIN-koden til en registrert karakter.';
+
     playerStep.innerHTML=`
       <div class="player-picker-head">
-        <div><h1>VELG KARAKTER</h1><p>Velg blant registrerte spillere. Valget huskes i denne nettleseren.</p></div>
+        <div><h1>VELG KARAKTER</h1><p>Sist valgte karakter huskes på denne enheten. Bytte til en annen karakter krever den karakterens PIN.</p></div>
         <button id="newPlayerButton" class="new-player-button" type="button">＋ Ny spiller</button>
       </div>
       <div id="playerListError" class="pin-error" aria-live="polite"></div>
@@ -72,12 +78,35 @@
       playerStep.insertAdjacentElement('afterend',createStep);
     }
 
+    let playerPinStep=$('playerPinStep');
+    if(!playerPinStep){
+      playerPinStep=document.createElement('div');
+      playerPinStep.id='playerPinStep';
+      playerPinStep.className='access-step';
+      playerPinStep.hidden=true;
+      playerPinStep.innerHTML=`
+        <div class="new-player-title"><span class="access-kicker">CHARACTER LOCK</span><h1>SKRIV PIN</h1><p id="playerPinPrompt">Bekreft PIN for karakteren.</p></div>
+        <form id="playerPinForm" class="new-player-form" novalidate>
+          <div id="playerPinPreview" class="character-set-choice">
+            <span class="character-set-art"><img id="playerPinImage" src="characters/adrian-1.png" alt="" draggable="false"></span>
+            <strong id="playerPinName">KARAKTER</strong><small id="playerPinCharacter">Character 1</small>
+          </div>
+          <label class="new-player-field"><span>Karakter-PIN · 4 tall</span><input id="playerPinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="••••" required></label>
+          <div class="pin-plain-warning">PIN kreves når du bytter karakter. Sist valgte karakter huskes på denne enheten.</div>
+          <div id="playerPinError" class="pin-error" aria-live="polite"></div>
+          <div class="new-player-actions"><button id="cancelPlayerPin" class="access-secondary" type="button">Avbryt</button><button id="confirmPlayerPin" class="access-primary" type="submit">Fortsett</button></div>
+        </form>`;
+      createStep.insertAdjacentElement('afterend',playerPinStep);
+    }
+
     $('newPlayerButton').addEventListener('click',showNewPlayer);
     $('cancelNewPlayer').addEventListener('click',()=>showPlayerPicker(false));
     $('newPlayerForm').addEventListener('submit',createPlayer);
+    $('cancelPlayerPin').addEventListener('click',()=>showPlayerPicker(false));
+    $('playerPinForm').addEventListener('submit',verifyPendingPlayer);
     $('playerChoices').addEventListener('click',e=>{
       const btn=e.target.closest('[data-player-id]');
-      if(btn)choosePlayer(btn.dataset.playerId);
+      if(btn)requestPlayerChoice(btn.dataset.playerId);
     });
   }
 
@@ -87,7 +116,7 @@
     wrap.innerHTML=players.map(p=>`
       <button class="player-choice dynamic-player-choice ${themeFor(p)}-choice ${selectedPlayer?.id===p.id?'current':''}" type="button" data-player-id="${esc(p.id)}">
         <span class="choice-img"><img src="${imageFor(p)}" alt="${esc(p.name)}, Level 1" draggable="false"></span>
-        <strong>${esc(p.name)}</strong><small>Character ${Number(p.character_set)||1}</small>
+        <strong>${esc(p.name)}</strong><small>${selectedPlayer?.id===p.id?'Sist valgt · ':''}Character ${Number(p.character_set)||1}</small>
       </button>`).join('');
     if(empty)empty.hidden=players.length>0;
   }
@@ -132,12 +161,15 @@
     const storedId=readStore(PLAYER_ID_KEY);
     const legacyName=readStore(LEGACY_PLAYER_KEY);
     selectedPlayer=players.find(p=>p.id===storedId)||players.find(p=>p.name===legacyName)||selectedPlayer&&players.find(p=>p.id===selectedPlayer.id)||null;
+    const verifiedId=readStore(VERIFIED_PLAYER_KEY);
+    if(verifiedId&&!players.some(p=>p.id===verifiedId))removeStore(VERIFIED_PLAYER_KEY);
     if(selectedPlayer){
       writeStore(PLAYER_ID_KEY,selectedPlayer.id);
       writeStore(LEGACY_PLAYER_KEY,selectedPlayer.name);
     }else{
       removeStore(PLAYER_ID_KEY);
       removeStore(LEGACY_PLAYER_KEY);
+      removeStore(VERIFIED_PLAYER_KEY);
     }
     renderPlayerChoices();
     updatePlayerUi();
@@ -182,22 +214,30 @@
     applySelectedControls();
   }
 
+  function hideAuxSteps(){
+    const newStep=$('newPlayerStep');if(newStep)newStep.hidden=true;
+    const playerPinStep=$('playerPinStep');if(playerPinStep)playerPinStep.hidden=true;
+  }
+
   function showPin(message=''){
+    pendingPlayer=null;
     gate.classList.add('show');
     pinStep.hidden=false;
     playerStep.hidden=true;
-    const newStep=$('newPlayerStep');if(newStep)newStep.hidden=true;
+    hideAuxSteps();
     gateClose.hidden=true;
     pinError.textContent=message;
     pinInput.disabled=false;
+    if(pinSubmit)pinSubmit.disabled=false;
     requestAnimationFrame(()=>pinInput.focus());
   }
 
   async function showPlayerPicker(reload=true){
+    pendingPlayer=null;
     gate.classList.add('show');
     pinStep.hidden=true;
     playerStep.hidden=false;
-    const newStep=$('newPlayerStep');if(newStep)newStep.hidden=true;
+    hideAuxSteps();
     gateClose.hidden=!unlocked||!selectedPlayer;
     if(reload){
       if($('playerListError'))$('playerListError').textContent='Henter spillere…';
@@ -206,14 +246,36 @@
   }
 
   function showNewPlayer(){
+    pendingPlayer=null;
     pinStep.hidden=true;
     playerStep.hidden=true;
+    const pinStepPlayer=$('playerPinStep');if(pinStepPlayer)pinStepPlayer.hidden=true;
     const step=$('newPlayerStep');if(step)step.hidden=false;
     gateClose.hidden=!unlocked||!selectedPlayer;
     const form=$('newPlayerForm');if(form)form.reset();
     const first=document.querySelector('input[name="characterSet"][value="1"]');if(first)first.checked=true;
     if($('newPlayerError'))$('newPlayerError').textContent='';
     setTimeout(()=>$('newPlayerName')?.focus(),50);
+  }
+
+  function showPlayerPin(player){
+    if(!player)return;
+    pendingPlayer=player;
+    gate.classList.add('show');
+    pinStep.hidden=true;
+    playerStep.hidden=true;
+    const newStep=$('newPlayerStep');if(newStep)newStep.hidden=true;
+    const step=$('playerPinStep');if(step)step.hidden=false;
+    gateClose.hidden=!unlocked||!selectedPlayer;
+    const img=$('playerPinImage'),name=$('playerPinName'),character=$('playerPinCharacter'),prompt=$('playerPinPrompt'),input=$('playerPinInput'),error=$('playerPinError');
+    if(img){img.src=imageFor(player);img.alt=`${player.name}, Character ${Number(player.character_set)||1}`}
+    if(name)name.textContent=player.name;
+    if(character)character.textContent=`Character ${Number(player.character_set)||1}`;
+    if(prompt)prompt.textContent=selectedPlayer?.id===player.id&&!unlocked?`Bekreft PIN for ${player.name} første gang på denne enheten.`:`Skriv PIN for å bytte til ${player.name}.`;
+    if(input){input.value='';input.disabled=false}
+    if(error)error.textContent='';
+    const confirm=$('confirmPlayerPin');if(confirm)confirm.disabled=false;
+    setTimeout(()=>input?.focus(),50);
   }
 
   function closeGate(){
@@ -234,6 +296,7 @@
     if(unlocked)return;
     await ensureCompatLoaded();
     unlocked=true;
+    loginVerifiedIds.clear();
     window.obdAuthReady=true;
     document.body.classList.add('auth-ready');
     updatePlayerUi();
@@ -241,11 +304,12 @@
     window.dispatchEvent(new Event('obd-auth-ready'));
   }
 
-  async function choosePlayer(id){
+  async function commitPlayerChoice(id,verified=false){
     const player=players.find(p=>p.id===id);
     if(!player)return;
     const changed=selectedPlayer?.id!==player.id;
     selectedPlayer=player;
+    if(verified)writeStore(VERIFIED_PLAYER_KEY,player.id);
     writeStore(PLAYER_ID_KEY,player.id);
     writeStore(LEGACY_PLAYER_KEY,player.name);
     updatePlayerUi();
@@ -257,6 +321,44 @@
         window.dispatchEvent(new CustomEvent('obd-player-changed',{detail:{player:player.name,playerId:player.id}}));
         if(typeof toast==='function')toast(`Spiller som ${player.name}`);
       }
+    }
+  }
+
+  async function requestPlayerChoice(id){
+    const player=players.find(p=>p.id===id);
+    if(!player)return;
+    const currentVerified=selectedPlayer?.id===player.id&&readStore(VERIFIED_PLAYER_KEY)===player.id;
+    if(currentVerified){
+      if(!unlocked)await finishUnlock();
+      else closeGate();
+      return;
+    }
+    if(loginVerifiedIds.has(player.id)){
+      await commitPlayerChoice(player.id,true);
+      return;
+    }
+    showPlayerPin(player);
+  }
+
+  async function verifyPendingPlayer(e){
+    e.preventDefault();
+    const player=pendingPlayer;
+    if(!player)return;
+    const input=$('playerPinInput'),error=$('playerPinError'),confirm=$('confirmPlayerPin');
+    const playerPin=input?.value.trim()||'';
+    if(!/^\d{4}$/.test(playerPin)){if(error)error.textContent='PIN må være nøyaktig 4 tall.';return}
+    if(error)error.textContent='';
+    if(input)input.disabled=true;
+    if(confirm)confirm.disabled=true;
+    try{
+      const result=await call({action:'verify_player_pin',player_id:player.id,player_pin:playerPin});
+      if(!result?.ok)throw new Error('Feil PIN');
+      pendingPlayer=null;
+      await commitPlayerChoice(player.id,true);
+    }catch(err){
+      if(error)error.textContent=`Feil PIN for ${player.name}.`;
+      if(input){input.disabled=false;input.select()}
+      if(confirm)confirm.disabled=false;
     }
   }
 
@@ -279,28 +381,55 @@
       const player=players.find(p=>p.id===created?.id)||players.find(p=>p.name.localeCompare(name,'nb-NO',{sensitivity:'base'})===0);
       if(!player)throw new Error('Spilleren ble opprettet, men kunne ikke lastes inn.');
       if(typeof toast==='function')toast(`${player.name} er opprettet`);
-      await choosePlayer(player.id);
+      await commitPlayerChoice(player.id,true);
     }catch(err){error.textContent=err.message||'Kunne ikke opprette spiller.'}
     finally{save.disabled=false}
+  }
+
+  async function continueAfterSiteAuth(authResult){
+    loginVerifiedIds=new Set(Array.isArray(authResult?.player_ids)?authResult.player_ids:[]);
+    await loadPlayers(false);
+
+    if(loginVerifiedIds.size===1){
+      const id=[...loginVerifiedIds][0];
+      const player=players.find(p=>p.id===id);
+      if(player){await commitPlayerChoice(player.id,true);return}
+    }
+
+    if(selectedPlayer&&loginVerifiedIds.has(selectedPlayer.id)){
+      await commitPlayerChoice(selectedPlayer.id,true);
+      return;
+    }
+
+    if(selectedPlayer&&readStore(VERIFIED_PLAYER_KEY)===selectedPlayer.id){
+      await finishUnlock();
+      return;
+    }
+
+    if(selectedPlayer){showPlayerPin(selectedPlayer);return}
+    await showPlayerPicker(false);
   }
 
   pinForm.addEventListener('submit',async e=>{
     e.preventDefault();
     const pin=pinInput.value.trim();
-    if(pin!==APP_PIN){
-      removeStore(PIN_KEY);
-      pinError.textContent='Feil PIN.';
-      pinInput.select();
-      return;
-    }
-    writeStore(PIN_KEY,pin);
-    pinInput.value='';
     pinError.textContent='';
+    pinInput.disabled=true;
+    if(pinSubmit)pinSubmit.disabled=true;
     try{
-      await loadPlayers(false);
-      if(selectedPlayer)await finishUnlock();
-      else await showPlayerPicker(false);
-    }catch(err){showPin(err.message||'Kunne ikke hente spillere.')}
+      const authResult=await baseCall({action:'auth',pin});
+      if(!authResult?.ok)throw new Error('Feil PIN');
+      writeStore(PIN_KEY,APP_PIN);
+      pinInput.value='';
+      await continueAfterSiteAuth(authResult);
+    }catch(err){
+      removeStore(PIN_KEY);
+      loginVerifiedIds.clear();
+      pinError.textContent='Feil PIN.';
+      pinInput.disabled=false;
+      if(pinSubmit)pinSubmit.disabled=false;
+      pinInput.select();
+    }
   });
 
   switchBtn.addEventListener('click',()=>{if(unlocked)showPlayerPicker(true)});
@@ -325,7 +454,8 @@
     if(storedPin===APP_PIN){
       try{
         await loadPlayers(false);
-        if(selectedPlayer)await finishUnlock();
+        if(selectedPlayer&&readStore(VERIFIED_PLAYER_KEY)===selectedPlayer.id)await finishUnlock();
+        else if(selectedPlayer)showPlayerPin(selectedPlayer);
         else await showPlayerPicker(false);
       }catch(err){showPin(err.message||'Kunne ikke hente spillere.')}
     }else{
