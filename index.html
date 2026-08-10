@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="battle.css">
   <link rel="stylesheet" href="auth.css">
+  <link rel="stylesheet" href="compact.css">
 </head>
 <body>
   <div id="accessGate" class="access-gate show" role="dialog" aria-modal="true" aria-label="Tilgang til Operation Big Dawg">
@@ -60,7 +61,9 @@
     <section id="battleSummary" class="battle-summary" aria-label="Weekly Battle sammendrag">
       <div class="battle-side battle-side-adrian">
         <div class="battle-mini-frame battle-mini-adrian"><img id="battleAdrianImg" src="characters/adrian-1.png" alt="Adrian" draggable="false"></div>
-        <span>ADRIAN</span>
+        <span id="battleAdrianRank" class="battle-rank">Couch Recruit</span>
+        <span class="battle-name">ADRIAN</span>
+        <small id="battleAdrianLevel" class="battle-level">Level 1</small>
       </div>
       <div class="battle-center">
         <span class="battle-kicker">WEEKLY BATTLE</span>
@@ -70,18 +73,15 @@
       </div>
       <div class="battle-side battle-side-rikard">
         <div class="battle-mini-frame battle-mini-rikard"><img id="battleRikardImg" src="characters/rikard-1.png" alt="Rikard" draggable="false"></div>
-        <span>RIKARD</span>
+        <span id="battleRikardRank" class="battle-rank">Couch Recruit</span>
+        <span class="battle-name">RIKARD</span>
+        <small id="battleRikardLevel" class="battle-level">Level 1</small>
       </div>
     </section>
 
-    <section id="home" class="mission-card">
+    <section id="home" class="mission-card mission-card-compact">
       <div class="mission-glow mission-blue"></div>
       <div class="mission-glow mission-red"></div>
-      <div class="mission-copy">
-        <span class="section-kicker">THE 100 DAY MISSION</span>
-        <h1>DISCIPLINE BUILDS <em>MONSTERS.</em></h1>
-        <p>Små steg. Store resultater. Ingen gratis levels.</p>
-      </div>
       <div class="mission-progress">
         <div class="mission-number" id="total">0 / 100</div>
         <div class="mission-meta"><span>Treningsdager</span><strong id="heroPercent">0%</strong></div>
@@ -91,6 +91,28 @@
           <strong id="nextMilestone">25</strong>
           <span id="milestoneLeft"></span>
         </div>
+      </div>
+    </section>
+
+    <section id="week" class="section-block">
+      <div class="section-heading">
+        <div><span class="section-kicker">WEEKLY BATTLE</span><h2>Denne uka</h2></div>
+        <span id="versus" class="versus"></span>
+      </div>
+      <div class="week-grid">
+        <article id="weekRikard" class="week-card week-rikard"></article>
+        <article id="weekAdrian" class="week-card week-adrian"></article>
+      </div>
+    </section>
+
+    <section id="stats" class="section-block">
+      <div class="section-heading">
+        <div><span class="section-kicker">FORM & RECORDS</span><h2>Streaks</h2></div>
+        <span class="section-note">3+ dager = streak 🔥</span>
+      </div>
+      <div class="form-grid">
+        <article id="formRikard" class="form-card form-rikard"></article>
+        <article id="formAdrian" class="form-card form-adrian"></article>
       </div>
     </section>
 
@@ -116,18 +138,7 @@
       </div>
     </section>
 
-    <section id="week" class="section-block">
-      <div class="section-heading">
-        <div><span class="section-kicker">WEEKLY BATTLE</span><h2>Denne uka</h2></div>
-        <span id="versus" class="versus"></span>
-      </div>
-      <div class="week-grid">
-        <article id="weekRikard" class="week-card week-rikard"></article>
-        <article id="weekAdrian" class="week-card week-adrian"></article>
-      </div>
-    </section>
-
-    <section id="calendar" class="section-block">
+    <section id="calendar" class="section-block calendar-section">
       <div class="section-heading">
         <div><span class="section-kicker">STREAK CALENDAR</span><h2>Mini-kalender</h2></div>
         <span class="section-note">S = styrke · K = kondis</span>
@@ -143,17 +154,6 @@
           <div class="dow"><span>M</span><span>T</span><span>O</span><span>T</span><span>F</span><span>L</span><span>S</span></div>
           <div id="heatAdrian" class="heat"></div>
         </article>
-      </div>
-    </section>
-
-    <section id="stats" class="section-block">
-      <div class="section-heading">
-        <div><span class="section-kicker">FORM & RECORDS</span><h2>Streaks</h2></div>
-        <span class="section-note">3+ dager = streak 🔥</span>
-      </div>
-      <div class="form-grid">
-        <article id="formRikard" class="form-card form-rikard"></article>
-        <article id="formAdrian" class="form-card form-adrian"></article>
       </div>
     </section>
 
