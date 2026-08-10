@@ -3,7 +3,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const APP_PIN = Deno.env.get('APP_PIN') || '1337';
-const api = `${SUPABASE_URL}/rest/v1/workouts`;
+const workoutsApi = `${SUPABASE_URL}/rest/v1/workouts`;
+const playersApi = `${SUPABASE_URL}/rest/v1/players`;
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'content-type, authorization, apikey',
@@ -15,6 +17,17 @@ const serviceHeaders = {
   'Authorization': `Bearer ${SERVICE_KEY}`,
   'Content-Type': 'application/json'
 };
+
+type Player = {
+  id: string;
+  name: string;
+  character_set: number;
+  pin: string;
+  created_at?: string;
+};
+
+const normalizeName = (value: unknown) => String(value ?? '').trim();
+const validPlayerPin = (value: unknown) => /^\d{4}$/.test(String(value ?? ''));
 
 function osloYmd(date: Date) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -35,14 +48,33 @@ function weekKey(input: string | Date) {
   return cal.toISOString().slice(0,10);
 }
 
-async function allRowsFor(person: string) {
-  const r = await fetch(`${api}?person=eq.${encodeURIComponent(person)}&select=id,person,workout_type,created_at&order=created_at.asc`, {headers:serviceHeaders});
+async function fetchPlayersWithPins(): Promise<Player[]> {
+  const r = await fetch(`${playersApi}?select=id,name,character_set,pin,created_at&order=created_at.asc`, {headers:serviceHeaders});
   if (!r.ok) throw new Error(await r.text());
   return await r.json();
 }
 
-async function ensureWeekCapacity(person: string, dateIso: string, excludeId?: string) {
-  const rows = await allRowsFor(person);
+async function resolvePlayer(input: {player_id?: unknown; person?: unknown; name?: unknown}): Promise<Player | null> {
+  if (input.player_id) {
+    const r = await fetch(`${playersApi}?id=eq.${encodeURIComponent(String(input.player_id))}&select=id,name,character_set,pin,created_at&limit=1`, {headers:serviceHeaders});
+    if (!r.ok) throw new Error(await r.text());
+    const arr = await r.json();
+    return arr[0] || null;
+  }
+  const wanted = normalizeName(input.person ?? input.name).toLocaleLowerCase('nb-NO');
+  if (!wanted) return null;
+  const players = await fetchPlayersWithPins();
+  return players.find(p => normalizeName(p.name).toLocaleLowerCase('nb-NO') === wanted) || null;
+}
+
+async function allRowsFor(playerId: string) {
+  const r = await fetch(`${workoutsApi}?player_id=eq.${encodeURIComponent(playerId)}&select=id,player_id,person,workout_type,created_at&order=created_at.asc`, {headers:serviceHeaders});
+  if (!r.ok) throw new Error(await r.text());
+  return await r.json();
+}
+
+async function ensureWeekCapacity(playerId: string, dateIso: string, excludeId?: string) {
+  const rows = await allRowsFor(playerId);
   const targetWeek = weekKey(dateIso);
   const targetDay = osloYmd(new Date(dateIso));
   const days = new Set<string>();
@@ -71,51 +103,118 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ok:true}),{headers:jsonHeaders});
     }
 
+    if (body.action === 'list_players') {
+      const r = await fetch(`${playersApi}?select=id,name,character_set,created_at&order=created_at.asc`,{headers:serviceHeaders});
+      return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
+    }
+
+    if (body.action === 'create_player') {
+      const name = normalizeName(body.name);
+      const characterSet = Number(body.character_set);
+      const playerPin = String(body.player_pin ?? '');
+      if (!name || name.length > 40 || ![1,2].includes(characterSet) || !validPlayerPin(playerPin)) {
+        return new Response(JSON.stringify({error:'Ugyldig spillerdata'}),{status:400,headers:jsonHeaders});
+      }
+      const existing = await resolvePlayer({name});
+      if (existing) return new Response(JSON.stringify({error:'Navnet er allerede i bruk'}),{status:409,headers:jsonHeaders});
+      const r = await fetch(playersApi,{
+        method:'POST',
+        headers:{...serviceHeaders,'Prefer':'return=representation'},
+        body:JSON.stringify({name,character_set:characterSet,pin:playerPin})
+      });
+      if (!r.ok) {
+        const text = await r.text();
+        if (r.status === 409 || text.includes('players_name_unique_ci')) {
+          return new Response(JSON.stringify({error:'Navnet er allerede i bruk'}),{status:409,headers:jsonHeaders});
+        }
+        return new Response(text,{status:r.status,headers:jsonHeaders});
+      }
+      return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
+    }
+
+    if (body.action === 'verify_player_pin') {
+      const player = await resolvePlayer(body);
+      if (!player) return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});
+      const ok = String(body.player_pin ?? '') === player.pin;
+      return new Response(JSON.stringify({ok}),{status:ok?200:403,headers:jsonHeaders});
+    }
+
+    if (body.action === 'change_player_pin') {
+      const player = await resolvePlayer(body);
+      if (!player) return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});
+      if (String(body.current_pin ?? '') !== player.pin) {
+        return new Response(JSON.stringify({error:'Feil spiller-PIN'}),{status:403,headers:jsonHeaders});
+      }
+      if (!validPlayerPin(body.new_pin)) {
+        return new Response(JSON.stringify({error:'Ny PIN må være 4 tall'}),{status:400,headers:jsonHeaders});
+      }
+      const r = await fetch(`${playersApi}?id=eq.${encodeURIComponent(player.id)}`,{
+        method:'PATCH', headers:{...serviceHeaders,'Prefer':'return=minimal'},
+        body:JSON.stringify({pin:String(body.new_pin)})
+      });
+      return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
+    }
+
+    if (body.action === 'delete_player') {
+      const player = await resolvePlayer(body);
+      if (!player) return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});
+      if (String(body.player_pin ?? '') !== player.pin) {
+        return new Response(JSON.stringify({error:'Feil spiller-PIN'}),{status:403,headers:jsonHeaders});
+      }
+      if (body.confirm !== 'DELETE_PLAYER') {
+        return new Response(JSON.stringify({error:'Confirmation required'}),{status:400,headers:jsonHeaders});
+      }
+      const r = await fetch(`${playersApi}?id=eq.${encodeURIComponent(player.id)}`,{method:'DELETE',headers:serviceHeaders});
+      return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
+    }
+
     if (body.action === 'list') {
-      const r = await fetch(`${api}?select=id,person,workout_type,created_at&order=created_at.desc`,{headers:serviceHeaders});
+      const r = await fetch(`${workoutsApi}?select=id,player_id,person,workout_type,created_at&order=created_at.desc`,{headers:serviceHeaders});
       return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
     }
 
     if (body.action === 'add') {
-      if (!['Rikard','Adrian'].includes(body.person) || !['strength','cardio'].includes(body.workout_type)) {
+      const player = await resolvePlayer(body);
+      if (!player || !['strength','cardio'].includes(body.workout_type)) {
         return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
       }
       const createdAt = new Date().toISOString();
-      try { await ensureWeekCapacity(body.person, createdAt); }
+      try { await ensureWeekCapacity(player.id, createdAt); }
       catch (e) {
         if (String(e).includes('WEEK_LIMIT')) return new Response(JSON.stringify({error:'Maks 7 tellende treningsdager per uke'}),{status:409,headers:jsonHeaders});
         throw e;
       }
-      const r = await fetch(api,{
+      const r = await fetch(workoutsApi,{
         method:'POST', headers:{...serviceHeaders,'Prefer':'return=representation'},
-        body:JSON.stringify({person:body.person,workout_type:body.workout_type,created_at:createdAt})
+        body:JSON.stringify({player_id:player.id,person:player.name,workout_type:body.workout_type,created_at:createdAt})
       });
       return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
     }
 
     if (body.action === 'undo') {
-      if (!['Rikard','Adrian'].includes(body.person)) return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
-      const q=await fetch(`${api}?person=eq.${encodeURIComponent(body.person)}&select=id&order=created_at.desc&limit=1`,{headers:serviceHeaders});
+      const player = await resolvePlayer(body);
+      if (!player) return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
+      const q=await fetch(`${workoutsApi}?player_id=eq.${encodeURIComponent(player.id)}&select=id&order=created_at.desc&limit=1`,{headers:serviceHeaders});
       const arr=await q.json();
       if(!arr.length) return new Response(JSON.stringify({ok:true,deleted:false}),{headers:jsonHeaders});
-      const r=await fetch(`${api}?id=eq.${arr[0].id}`,{method:'DELETE',headers:serviceHeaders});
+      const r=await fetch(`${workoutsApi}?id=eq.${arr[0].id}`,{method:'DELETE',headers:serviceHeaders});
       return new Response(JSON.stringify({ok:r.ok,deleted:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
     }
 
     if (body.action === 'edit') {
       if (!body.id || !body.created_at) return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
-      const q = await fetch(`${api}?id=eq.${encodeURIComponent(body.id)}&select=id,person,workout_type,created_at&limit=1`,{headers:serviceHeaders});
+      const q = await fetch(`${workoutsApi}?id=eq.${encodeURIComponent(body.id)}&select=id,player_id,person,workout_type,created_at&limit=1`,{headers:serviceHeaders});
       const arr = await q.json();
       if (!arr.length) return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:jsonHeaders});
       const row = arr[0];
       const dt = new Date(body.created_at);
       if (Number.isNaN(dt.getTime())) return new Response(JSON.stringify({error:'Ugyldig dato'}),{status:400,headers:jsonHeaders});
-      try { await ensureWeekCapacity(row.person, dt.toISOString(), row.id); }
+      try { await ensureWeekCapacity(row.player_id, dt.toISOString(), row.id); }
       catch (e) {
         if (String(e).includes('WEEK_LIMIT')) return new Response(JSON.stringify({error:'Den uken har allerede 7 tellende treningsdager'}),{status:409,headers:jsonHeaders});
         throw e;
       }
-      const r = await fetch(`${api}?id=eq.${encodeURIComponent(body.id)}`,{
+      const r = await fetch(`${workoutsApi}?id=eq.${encodeURIComponent(body.id)}`,{
         method:'PATCH', headers:{...serviceHeaders,'Prefer':'return=representation'},
         body:JSON.stringify({created_at:dt.toISOString()})
       });
@@ -124,13 +223,13 @@ Deno.serve(async (req: Request) => {
 
     if (body.action === 'delete') {
       if (!body.id) return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
-      const r = await fetch(`${api}?id=eq.${encodeURIComponent(body.id)}`,{method:'DELETE',headers:serviceHeaders});
+      const r = await fetch(`${workoutsApi}?id=eq.${encodeURIComponent(body.id)}`,{method:'DELETE',headers:serviceHeaders});
       return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
     }
 
     if (body.action === 'reset') {
       if (body.confirm !== 'RESET_ALL_WORKOUTS') return new Response(JSON.stringify({error:'Confirmation required'}),{status:400,headers:jsonHeaders});
-      const r = await fetch(`${api}?id=not.is.null`,{method:'DELETE',headers:serviceHeaders});
+      const r = await fetch(`${workoutsApi}?id=not.is.null`,{method:'DELETE',headers:serviceHeaders});
       return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
     }
 
