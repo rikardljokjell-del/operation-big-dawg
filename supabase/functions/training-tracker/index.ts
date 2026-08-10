@@ -63,15 +63,12 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
 
-    if (body.action === 'auth') {
-      if (String(body.pin || '') !== APP_PIN) return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
-      return new Response(JSON.stringify({ok:true}),{headers:jsonHeaders});
+    if (String(body.pin || '') !== APP_PIN) {
+      return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
     }
 
-    // Preview compatibility: requests that send a PIN are validated now, while
-    // legacy production requests without a PIN remain allowed until frontend publish.
-    if (body.pin && String(body.pin) !== APP_PIN) {
-      return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
+    if (body.action === 'auth') {
+      return new Response(JSON.stringify({ok:true}),{headers:jsonHeaders});
     }
 
     if (body.action === 'list') {
@@ -132,7 +129,6 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.action === 'reset') {
-      if (String(body.pin || '') !== APP_PIN) return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
       if (body.confirm !== 'RESET_ALL_WORKOUTS') return new Response(JSON.stringify({error:'Confirmation required'}),{status:400,headers:jsonHeaders});
       const r = await fetch(`${api}?id=not.is.null`,{method:'DELETE',headers:serviceHeaders});
       return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
