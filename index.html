@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="battle.css">
   <link rel="stylesheet" href="auth.css">
   <link rel="stylesheet" href="compact.css">
+  <link rel="stylesheet" href="reward.css">
 </head>
 <body>
   <div id="accessGate" class="access-gate show" role="dialog" aria-modal="true" aria-label="Tilgang til Operation Big Dawg">
@@ -57,6 +58,24 @@
         <div id="status" class="status">Kobler til…</div>
       </div>
     </header>
+
+    <section id="rewardEngine" class="reward-engine" aria-label="Neste belønning" aria-live="polite">
+      <div class="reward-head">
+        <span id="rewardKicker" class="reward-kicker">NEXT REWARD</span>
+        <span id="rewardPlayer" class="reward-player">RIKARD</span>
+      </div>
+      <div class="reward-main">
+        <strong id="rewardHeadline">Laster neste mål…</strong>
+        <span id="rewardSub">Bygger dagens mission.</span>
+      </div>
+      <div class="reward-grid">
+        <div class="reward-chip"><small>NESTE DAG</small><strong id="rewardNextXp">+4 XP</strong></div>
+        <div class="reward-chip"><small>NESTE LEVEL</small><strong id="rewardNextLevel">10 XP</strong></div>
+        <div class="reward-chip mission"><small>TODAY</small><strong id="rewardMission">Logg én økt</strong></div>
+      </div>
+      <div class="reward-level-track"><span id="rewardLevelFill"></span></div>
+      <span id="rewardStreakMeta" hidden>🔥 0</span>
+    </section>
 
     <section id="battleSummary" class="battle-summary" aria-label="Weekly Battle sammendrag">
       <div class="battle-side battle-side-adrian">
@@ -216,12 +235,26 @@
   <div id="achOverlay" class="overlay">
     <div class="overlay-card"><span class="section-kicker">ACHIEVEMENT UNLOCKED</span><div class="trophy">🏆</div><div id="achText" class="overlay-title"></div></div>
   </div>
+
+  <div id="workoutPayoff" class="workout-payoff" aria-live="assertive" aria-atomic="true">
+    <div class="payoff-card">
+      <div class="payoff-spark"></div>
+      <div id="payoffKicker" class="payoff-kicker">WORKOUT LOCKED IN</div>
+      <div id="payoffXp" class="payoff-xp">+0 XP</div>
+      <div id="payoffTitle" class="payoff-title">Økt registrert</div>
+      <div id="payoffSub" class="payoff-sub"></div>
+      <div class="payoff-progress"><span id="payoffFill"></span></div>
+      <div id="payoffLeader" class="payoff-leader"></div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <script src="core.js"></script>
   <script src="characters.js"></script>
   <script src="auth.js"></script>
   <script src="ui.js"></script>
+  <script src="reward.js"></script>
   <script src="battle.js"></script>
 </body>
 </html>
