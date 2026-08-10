@@ -128,4 +128,12 @@ $('deleteEdit').onclick=async()=>{if(!editing||busy)return;if(!confirm('Slette d
 $('moreBtn').onclick=()=>{visibleHistory=visibleHistory>=rows.length?10:Math.min(rows.length,visibleHistory+10);renderHistory()};
 $('evoOverlay').onclick=closeEvolution;$('achOverlay').onclick=()=>$('achOverlay').classList.remove('show');
 $('resetAll').onclick=async()=>{if(busy)return;const pin=prompt('Tast PIN for å nullstille all datalogg');if(pin===null)return;if(pin!=='1337'){toast('Feil PIN');return}if(!confirm('Dette sletter ALL treningshistorikk. Er du sikker?'))return;setBusy(true);try{await call({action:'reset',confirm:'RESET_ALL_WORKOUTS',pin});rows=[];lastBadgeSet=new Set();visibleHistory=10;render();toast('All historikk er nullstilt')}catch(e){toast(e.message)}finally{setBusy(false)}};
-refresh(true);setInterval(()=>refresh(true),15000);
+
+function startApp(){
+  if(window.__obdAppStarted)return;
+  window.__obdAppStarted=true;
+  refresh(true);
+  window.__obdRefreshTimer=setInterval(()=>refresh(true),15000);
+}
+if(window.obdAuthReady)startApp();
+else window.addEventListener('obd-auth-ready',startApp,{once:true});
