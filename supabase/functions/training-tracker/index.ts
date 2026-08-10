@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
       const name = normalizeName(body.name);
       const characterSet = Number(body.character_set);
       const playerPin = String(body.player_pin ?? '');
-      if (!name || name.length > 40 || ![1,2].includes(characterSet) || !validPlayerPin(playerPin)) {
+      if (!name || name.length > 40 || ![1,2,3].includes(characterSet) || !validPlayerPin(playerPin)) {
         return new Response(JSON.stringify({error:'Ugyldig spillerdata'}),{status:400,headers:jsonHeaders});
       }
       const existing = await resolvePlayer({name});
