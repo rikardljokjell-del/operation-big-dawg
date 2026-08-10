@@ -1,3 +1,5 @@
+const activePlayer=()=>{const p=typeof window.getSelectedPlayer==='function'?window.getSelectedPlayer():'';return PEOPLE.includes(p)?p:PEOPLE[0]};
+
 function weekCard(p){
   const n=uniqueDays(p,currentWeek()),st=streakInfo(p),t=typesThisWeek(p),imm=nextImmediate(n),final=finalWeekXp(n),g=gained(n),status=n>=3?'good':'warn',pct=Math.min(100,n/3*100);
   return `<div class="week-top"><div><span class="section-kicker">${p.toUpperCase()}</span><div class="week-name">Ukesmål</div></div><span class="pill ${status}">${n>=3?'STREAK SAFE':'TARGET 3'}</span></div><div class="week-score"><div class="week-count">${n} / 3</div><div class="week-target">${n}/7 tellende dager</div></div><div class="week-mini-progress"><span style="width:${pct}%"></span></div><div class="split"><span>🔥 ${st.current} ukers streak</span><span>S ${t.strength} · K ${t.cardio}</span></div><div class="motivation">${motivation(n)}</div><div class="forecast"><b>Opptjent:</b> +${g} XP<br><b>Hvis uka slutter nå:</b> ${final>=0?'+':''}${final} XP · ${verdict(n)}<br><span class="muted">Neste nye treningsdag: ${imm>0?'+'+imm+' XP':'ingen ekstra XP'}</span></div>`;
@@ -28,51 +30,76 @@ function renderHero(){
 }
 
 function renderWeek(){
-  $('weekRikard').innerHTML=weekCard('Rikard');
-  $('weekAdrian').innerHTML=weekCard('Adrian');
+  const p=activePlayer();
+  PEOPLE.forEach(name=>{
+    const el=$('week'+name),active=name===p;
+    el.hidden=!active;
+    el.innerHTML=active?weekCard(name):'';
+  });
   const a=uniqueDays('Rikard',currentWeek()),b=uniqueDays('Adrian',currentWeek());
   $('versus').textContent=a===b?`Uavgjort ${a}–${b}`:a>b?`Rikard ${a}–${b}`:`Adrian ${b}–${a}`;
+  $('versus').hidden=true;
 }
 
 function renderPeople(){
-  PEOPLE.forEach(p=>$('person'+p).innerHTML=personCard(p));
+  const p=activePlayer();
+  PEOPLE.forEach(name=>{
+    const el=$('person'+name),active=name===p;
+    el.hidden=!active;
+    el.innerHTML=active?personCard(name):'';
+  });
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>addWorkout(b.dataset.person,b.dataset.add));
   document.querySelectorAll('[data-undo]').forEach(b=>b.onclick=()=>undoWorkout(b.dataset.undo));
   if(typeof window.applySelectedControls==='function')window.applySelectedControls();
 }
 
-function renderEvolution(){PEOPLE.forEach(p=>$('evolution'+p).innerHTML=evolutionCard(p))}
+function renderEvolution(){
+  const p=activePlayer();
+  PEOPLE.forEach(name=>{
+    const el=$('evolution'+name),active=name===p;
+    el.hidden=!active;
+    el.innerHTML=active?evolutionCard(name):'';
+  });
+}
 
 function renderHeat(){
-  const today=ymd(new Date()),start=addDaysYmd(currentWeek(),-49);
-  PEOPLE.forEach(p=>{
+  const p=activePlayer(),today=ymd(new Date()),start=addDaysYmd(currentWeek(),-49);
+  PEOPLE.forEach(name=>{
+    const h=$('heat'+name),card=h?.closest('.calendar-card'),active=name===p;
+    if(card)card.hidden=!active;
+    if(!h)return;
+    if(!active){h.innerHTML='';return}
     const m=new Map();
-    rows.filter(r=>r.person===p).forEach(r=>{const d=ymd(r.created_at);if(!m.has(d))m.set(d,new Set());m.get(d).add(r.workout_type)});
+    rows.filter(r=>r.person===name).forEach(r=>{const d=ymd(r.created_at);if(!m.has(d))m.set(d,new Set());m.get(d).add(r.workout_type)});
     let out='';
     for(let i=0;i<56;i++){
       const d=addDaysYmd(start,i),set=m.get(d)||new Set(),future=d>today;
       out+=`<div class="day ${set.size?'has':''} ${future?'future':''}" title="${d}">${set.has('strength')?'<span class="s">S</span>':''}${set.has('cardio')?'<span class="k">K</span>':''}</div>`;
     }
-    $('heat'+p).innerHTML=out;
+    h.innerHTML=out;
   });
 }
 
 function renderForm(){
-  PEOPLE.forEach(p=>{
-    const s=streakInfo(p),arr=[5,4,3,2,1,0].map(i=>uniqueDays(p,addDaysYmd(currentWeek(),-7*i))),bestWeek=Math.max(0,...[...weekMap(p).values()].map(v=>v.size));
-    $('form'+p).innerHTML=`<div class="name"><div><span class="section-kicker">${p.toUpperCase()}</span><h3>Form</h3></div><span class="pill ${s.current?'good':''}">🔥 ${s.current}</span></div><div class="split"><span>Beste streak: ${s.best} uker</span><span>Beste uke: ${bestWeek}/7</span></div><div class="form-strip">${arr.map(x=>`<span class="week-chip ${x>=3?'good':x<2?'bad':''}">${x}</span>`).join('')}</div>`;
+  const p=activePlayer();
+  PEOPLE.forEach(name=>{
+    const el=$('form'+name),active=name===p;
+    el.hidden=!active;
+    if(!active){el.innerHTML='';return}
+    const s=streakInfo(name),arr=[5,4,3,2,1,0].map(i=>uniqueDays(name,addDaysYmd(currentWeek(),-7*i))),bestWeek=Math.max(0,...[...weekMap(name).values()].map(v=>v.size));
+    el.innerHTML=`<div class="name"><div><span class="section-kicker">${name.toUpperCase()}</span><h3>Form</h3></div><span class="pill ${s.current?'good':''}">🔥 ${s.current}</span></div><div class="split"><span>Beste streak: ${s.best} uker</span><span>Beste uke: ${bestWeek}/7</span></div><div class="form-strip">${arr.map(x=>`<span class="week-chip ${x>=3?'good':x<2?'bad':''}">${x}</span>`).join('')}</div>`;
   });
 }
 
 function renderHistory(){
-  const list=rows.slice(0,visibleHistory),h=$('history');
-  h.innerHTML=!list.length?'<div class="muted" style="text-align:center;padding:18px">Ingen økter logget ennå.</div>':list.map(r=>{
+  const p=activePlayer(),filtered=rows.filter(r=>r.person===p),list=filtered.slice(0,visibleHistory),h=$('history');
+  h.innerHTML=!list.length?`<div class="muted" style="text-align:center;padding:18px">Ingen økter logget for ${p} ennå.</div>`:list.map(r=>{
     const d=new Date(r.created_at),date=d.toLocaleDateString('nb-NO',{day:'2-digit',month:'short',year:'2-digit',timeZone:'Europe/Oslo'}),time=d.toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Oslo'}),label=r.workout_type==='strength'?'Styrke':'Kondis';
     return `<div class="row" data-id="${r.id}"><div class="left"><span class="dot ${r.workout_type}"></span><div><div class="who">${r.person}</div><div class="kind">${label}</div></div></div><div class="when">${date}<br>${time}</div></div>`;
   }).join('');
   document.querySelectorAll('.row[data-id]').forEach(el=>el.onclick=()=>openEdit(el.dataset.id));
-  $('moreBtn').hidden=rows.length<=10;
-  $('moreBtn').textContent=visibleHistory>=rows.length?'Vis færre':`Vis mer (${Math.min(10,rows.length-visibleHistory)})`;
+  $('moreBtn').hidden=filtered.length<=10;
+  $('moreBtn').textContent=visibleHistory>=filtered.length?'Vis færre':`Vis mer (${Math.min(10,filtered.length-visibleHistory)})`;
 }
 
 const badgeList=()=>{
@@ -90,8 +117,8 @@ const badgeList=()=>{
 };
 
 function renderBadges(){
-  const all=badgeList();
-  $('badges').innerHTML=all.length?all.map(x=>`<span class="badge">🏆 ${x}</span>`).join(''):'<span class="muted small">Ingen achievements ennå. Get to work.</span>';
+  const p=activePlayer(),prefix=`${p}: `,all=badgeList().filter(x=>x.startsWith(prefix)).map(x=>x.slice(prefix.length));
+  $('badges').innerHTML=all.length?all.map(x=>`<span class="badge">🏆 ${x}</span>`).join(''):`<span class="muted small">Ingen achievements for ${p} ennå. Get to work.</span>`;
   $('badgeCount').textContent=`${all.length} låst opp`;
 }
 
@@ -126,9 +153,11 @@ function openEdit(id){editing=rows.find(r=>r.id===id);if(!editing)return;$('edit
 $('cancelEdit').onclick=()=>$('editDialog').close();
 $('saveEdit').onclick=async()=>{if(!editing||busy)return;const val=$('editDate').value;if(!val)return toast('Velg dato og tid');if(!confirm('Lagre ny dato/tid for økten?'))return;setBusy(true);try{await call({action:'edit',id:editing.id,created_at:new Date(val).toISOString()});$('editDialog').close();await refresh(true);toast('Økten er oppdatert')}catch(e){toast(e.message)}finally{setBusy(false)}};
 $('deleteEdit').onclick=async()=>{if(!editing||busy)return;if(!confirm('Slette denne økten permanent?'))return;setBusy(true);try{await call({action:'delete',id:editing.id});$('editDialog').close();await refresh(true);toast('Økten er slettet')}catch(e){toast(e.message)}finally{setBusy(false)}};
-$('moreBtn').onclick=()=>{visibleHistory=visibleHistory>=rows.length?10:Math.min(rows.length,visibleHistory+10);renderHistory()};
+$('moreBtn').onclick=()=>{const count=rows.filter(r=>r.person===activePlayer()).length;visibleHistory=visibleHistory>=count?10:Math.min(count,visibleHistory+10);renderHistory()};
 $('evoOverlay').onclick=closeEvolution;$('achOverlay').onclick=()=>$('achOverlay').classList.remove('show');
 $('resetAll').onclick=async()=>{if(busy)return;const pin=prompt('Tast PIN for å nullstille all datalogg');if(pin===null)return;if(pin!=='1337'){toast('Feil PIN');return}if(!confirm('Dette sletter ALL treningshistorikk. Er du sikker?'))return;setBusy(true);try{await call({action:'reset',confirm:'RESET_ALL_WORKOUTS',pin});rows=[];lastBadgeSet=new Set();visibleHistory=10;render();toast('All historikk er nullstilt')}catch(e){toast(e.message)}finally{setBusy(false)}};
+
+window.addEventListener('obd-player-changed',()=>{if(!window.__obdAppStarted)return;visibleHistory=10;render()});
 
 function startApp(){
   if(window.__obdAppStarted)return;
