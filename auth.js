@@ -23,6 +23,28 @@
 
   const gate=$('accessGate'),pinStep=$('pinStep'),playerStep=$('playerStep'),pinForm=$('pinForm'),pinInput=$('pinInput'),pinError=$('pinError'),gateClose=$('gateClose'),switchBtn=$('playerSwitch'),label=$('selectedPlayerLabel');
 
+  function applySelectedControls(){
+    PEOPLE.forEach(person=>{
+      const card=$('person'+person);
+      if(!card)return;
+      const active=person===selectedPlayer;
+      card.classList.toggle('player-selected',active);
+      const actions=card.querySelector('.actions');
+      if(actions)actions.hidden=!active;
+      let note=card.querySelector('.player-inactive-note');
+      if(!active){
+        const text=selectedPlayer?`Spiller som <strong>${selectedPlayer}</strong> · bytt øverst for å logge som ${person}.`:'Velg karakter øverst for å logge økter.';
+        if(!note){
+          note=document.createElement('div');
+          note.className='player-inactive-note';
+          card.appendChild(note);
+        }
+        if(note.innerHTML!==text)note.innerHTML=text;
+      }else if(note)note.remove();
+    });
+  }
+  window.applySelectedControls=applySelectedControls;
+
   function updatePlayerUi(){
     if(label)label.textContent=selectedPlayer||'VELG';
     if(switchBtn)switchBtn.setAttribute('aria-label',selectedPlayer?`Spiller som ${selectedPlayer}. Bytt karakter`:'Velg karakter');
@@ -75,26 +97,6 @@
     }
   }
 
-  function applySelectedControls(){
-    PEOPLE.forEach(person=>{
-      const card=$('person'+person);
-      if(!card)return;
-      const active=person===selectedPlayer;
-      card.classList.toggle('player-selected',active);
-      const actions=card.querySelector('.actions');
-      if(actions)actions.hidden=!active;
-      let note=card.querySelector('.player-inactive-note');
-      if(!active){
-        if(!note){
-          note=document.createElement('div');
-          note.className='player-inactive-note';
-          card.appendChild(note);
-        }
-        note.innerHTML=selectedPlayer?`Spiller som <strong>${selectedPlayer}</strong> · bytt øverst for å logge som ${person}.`:'Velg karakter øverst for å logge økter.';
-      }else if(note)note.remove();
-    });
-  }
-
   pinForm.addEventListener('submit',e=>{
     e.preventDefault();
     const pin=pinInput.value.trim();
@@ -126,8 +128,6 @@
     }
   },true);
 
-  const fighters=$('fighters');
-  if(fighters)new MutationObserver(applySelectedControls).observe(fighters,{childList:true,subtree:true});
   updatePlayerUi();
 
   const storedPin=readStore(PIN_KEY);
