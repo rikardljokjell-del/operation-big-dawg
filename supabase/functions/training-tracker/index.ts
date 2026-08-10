@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const APP_PIN = Deno.env.get('APP_PIN') || '1337';
 const api = `${SUPABASE_URL}/rest/v1/workouts`;
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -62,6 +63,17 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
 
+    if (body.action === 'auth') {
+      if (String(body.pin || '') !== APP_PIN) return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
+      return new Response(JSON.stringify({ok:true}),{headers:jsonHeaders});
+    }
+
+    // Preview compatibility: requests that send a PIN are validated now, while
+    // legacy production requests without a PIN remain allowed until frontend publish.
+    if (body.pin && String(body.pin) !== APP_PIN) {
+      return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
+    }
+
     if (body.action === 'list') {
       const r = await fetch(`${api}?select=id,person,workout_type,created_at&order=created_at.desc`,{headers:serviceHeaders});
       return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
@@ -120,7 +132,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.action === 'reset') {
-      if (body.pin !== '1337') return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
+      if (String(body.pin || '') !== APP_PIN) return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
       if (body.confirm !== 'RESET_ALL_WORKOUTS') return new Response(JSON.stringify({error:'Confirmation required'}),{status:400,headers:jsonHeaders});
       const r = await fetch(`${api}?id=not.is.null`,{method:'DELETE',headers:serviceHeaders});
       return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
