@@ -67,6 +67,14 @@ async function resolvePlayer(input: {player_id?: unknown; person?: unknown; name
   return players.find(p => normalizeName(p.name).toLocaleLowerCase('nb-NO') === wanted) || null;
 }
 
+async function authenticateAccessPin(value: unknown) {
+  const pin = String(value ?? '');
+  const master = pin === APP_PIN;
+  const players = await fetchPlayersWithPins();
+  const playerIds = players.filter(player => player.pin === pin).map(player => player.id);
+  return {ok: master || playerIds.length > 0, master, player_ids: playerIds};
+}
+
 async function allRowsFor(playerId: string) {
   const r = await fetch(`${workoutsApi}?player_id=eq.${encodeURIComponent(playerId)}&select=id,player_id,person,workout_type,created_at&order=created_at.asc`, {headers:serviceHeaders});
   if (!r.ok) throw new Error(await r.text());
@@ -95,12 +103,14 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
 
-    if (String(body.pin || '') !== APP_PIN) {
-      return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
+    if (body.action === 'auth') {
+      const access = await authenticateAccessPin(body.pin);
+      if (!access.ok) return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
+      return new Response(JSON.stringify(access),{headers:jsonHeaders});
     }
 
-    if (body.action === 'auth') {
-      return new Response(JSON.stringify({ok:true}),{headers:jsonHeaders});
+    if (String(body.pin || '') !== APP_PIN) {
+      return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
     }
 
     if (body.action === 'list_players') {
