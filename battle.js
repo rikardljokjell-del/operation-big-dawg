@@ -2,6 +2,13 @@
   const STORE_KEY='obd_battle_players_v1';
   let memoryStore={};
 
+  if(!document.querySelector('link[href="battle-multi.css"]')){
+    const link=document.createElement('link');
+    link.rel='stylesheet';
+    link.href='battle-multi.css';
+    document.head.appendChild(link);
+  }
+
   const esc=value=>String(value??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
   const players=()=>typeof window.getPlayers==='function'?window.getPlayers():[];
   const activeMeta=()=>{
@@ -135,11 +142,13 @@
     </div>`;
     document.body.appendChild(wrap);
     wrap.addEventListener('click',e=>{
-      if(e.target.closest('[data-battle-cancel]'))closePicker();
+      if(e.target.closest('[data-battle-cancel]')){closePicker();return}
       const option=e.target.closest('[data-battle-option]');
-      if(option&&!option.querySelector('input')?.disabled){
+      if(option){
+        e.preventDefault();
         const input=option.querySelector('input');
-        if(e.target!==input)input.checked=!input.checked;
+        if(!input||input.disabled)return;
+        input.checked=!input.checked;
         enforcePickerLimit(input);
         updatePickerMeta();
       }
