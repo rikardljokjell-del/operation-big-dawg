@@ -36,5 +36,6 @@
   const loadProgression=()=>loadScript('progression-unbounded.js','data-obd-unbounded-progression',loadTest);
   const loadDebug=()=>loadScript('test-debug.js','data-obd-test-debug-router',loadProgression);
   const loadOnboarding=()=>loadScript('onboarding-access.js','data-obd-onboarding-access',loadDebug);
-  loadScript('starter-event.js','data-obd-starter-event',loadOnboarding);
+  const loadCompanionArt=()=>loadScript('starter-companion-art.js','data-obd-starter-companion-art',loadOnboarding);
+  loadScript('starter-event.js','data-obd-starter-event',loadCompanionArt);
 })();
