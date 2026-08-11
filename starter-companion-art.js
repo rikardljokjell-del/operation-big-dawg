@@ -3,20 +3,60 @@
   window.__obdStarterCompanionArt=true;
 
   const ASSETS={
-    1:'starter-companions/bulbasaur.svg',
-    4:'starter-companions/charmander.svg',
-    7:'starter-companions/squirtle.svg'
+    1:'starter-companions/bulbasaur.png',
+    4:'starter-companions/charmander.png',
+    7:'starter-companions/squirtle.png'
   };
 
   function ensureStyle(){
-    if(document.getElementById('starterCompanionVectorStyle'))return;
+    if(document.getElementById('starterCompanionPngStyle'))return;
+    const old=document.getElementById('starterCompanionVectorStyle');
+    old?.remove();
     const style=document.createElement('style');
-    style.id='starterCompanionVectorStyle';
+    style.id='starterCompanionPngStyle';
     style.textContent=`
-      .starter-companion{overflow:visible!important;background:none!important;border:0!important;box-shadow:none!important}
-      .starter-companion::before{inset:15%!important;background:radial-gradient(circle,rgba(255,255,255,.20),rgba(80,155,220,.09) 48%,transparent 73%)!important;filter:blur(7px)!important}
-      .starter-companion img.starter-companion-vector{width:112%!important;height:112%!important;object-fit:contain!important;transform:none!important;-webkit-mask-image:none!important;mask-image:none!important;filter:drop-shadow(0 5px 3px rgba(0,0,0,.22))!important}
-      .battle-fighter-art .starter-companion img.starter-companion-vector{width:116%!important;height:116%!important}
+      .starter-companion-host{position:relative!important}
+      .starter-companion{
+        position:absolute!important;
+        z-index:12!important;
+        width:42px!important;
+        height:42px!important;
+        right:4px!important;
+        bottom:5px!important;
+        display:grid!important;
+        place-items:center!important;
+        overflow:visible!important;
+        background:none!important;
+        border:0!important;
+        box-shadow:none!important;
+        pointer-events:none!important;
+        opacity:1!important;
+        filter:none!important;
+      }
+      .starter-companion::before{display:none!important}
+      .starter-companion img.starter-companion-png{
+        display:block!important;
+        width:100%!important;
+        height:100%!important;
+        max-width:100%!important;
+        max-height:100%!important;
+        object-fit:contain!important;
+        object-position:center!important;
+        transform:none!important;
+        -webkit-mask-image:none!important;
+        mask-image:none!important;
+        filter:drop-shadow(0 2px 2px rgba(0,0,0,.34))!important;
+      }
+      .battle-fighter-art .starter-companion{
+        width:34px!important;
+        height:34px!important;
+        right:3px!important;
+        bottom:3px!important;
+      }
+      @media(max-width:390px){
+        .starter-companion{width:38px!important;height:38px!important;right:3px!important;bottom:4px!important}
+        .battle-fighter-art .starter-companion{width:32px!important;height:32px!important;right:2px!important;bottom:2px!important}
+      }
     `;
     document.head.appendChild(style);
   }
@@ -28,8 +68,10 @@
     if(!img)return;
     const current=img.getAttribute('src')||'';
     if(current!==asset)img.setAttribute('src',asset);
-    img.classList.add('starter-companion-vector');
-    img.dataset.vectorStarter=String(id);
+    img.classList.remove('starter-companion-vector');
+    img.classList.add('starter-companion-png');
+    delete img.dataset.vectorStarter;
+    img.dataset.pngStarter=String(id);
   }
 
   function apply(){
