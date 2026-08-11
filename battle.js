@@ -27,8 +27,16 @@
   function selectionForActive(){
     const all=players(),active=activeMeta();
     if(!active)return [];
-    const map=readMap(),stored=Array.isArray(map[active.id])?map[active.id]:[];
+    const map=readMap(),hasStored=Object.prototype.hasOwnProperty.call(map,active.id)&&Array.isArray(map[active.id]);
     const available=new Set(all.map(p=>p.id));
+
+    // No manual choice yet: show every available player, up to six, while always keeping the active player included.
+    // Do not persist this default. That way newly added players also appear automatically until the user saves a custom roster.
+    if(!hasStored){
+      return [active,...all.filter(p=>p.id!==active.id)].slice(0,6);
+    }
+
+    const stored=map[active.id];
     let ids=[active.id,...stored.filter(id=>id!==active.id&&available.has(id))];
     ids=[...new Set(ids)].slice(0,6);
     if(ids.length<2&&all.length>1){
