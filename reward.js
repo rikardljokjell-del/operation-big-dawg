@@ -163,7 +163,14 @@
   });
 
   window.renderRewardEngine=renderRewardEngine;
-  window.addEventListener('obd-workout-added',e=>showWorkoutPayoff(e.detail||{}));
+  window.addEventListener('obd-workout-added',e=>{
+    const detail=e.detail||{};
+    setTimeout(()=>{
+      if(window.__obdStarterStoryPriority){window.__obdStarterDeferredPayoff=detail;return}
+      showWorkoutPayoff(detail);
+    },0);
+  });
+  window.addEventListener('obd-starter-story-complete',e=>showWorkoutPayoff(e.detail||{}));
   window.addEventListener('obd-player-changed',renderRewardEngine);
   window.addEventListener('pageshow',renderRewardEngine);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderRewardEngine()});
