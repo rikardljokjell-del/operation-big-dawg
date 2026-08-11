@@ -34,5 +34,6 @@
     loadScript('boss-test-xp.js','data-obd-gym-xp-test');
   };
   const loadProgression=()=>loadScript('progression-unbounded.js','data-obd-unbounded-progression',loadTest);
-  loadScript('test-debug.js','data-obd-test-debug-router',loadProgression);
+  const loadDebug=()=>loadScript('test-debug.js','data-obd-test-debug-router',loadProgression);
+  loadScript('onboarding-access.js','data-obd-onboarding-access',loadDebug);
 })();
