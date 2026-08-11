@@ -222,9 +222,12 @@ Deno.serve(async (req: Request) => {
     if (body.action === 'undo') {
       const player = await resolvePlayer(body);
       if (!player) return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
-      const q=await fetch(`${workoutsApi}?player_id=eq.${encodeURIComponent(player.id)}&select=id&order=created_at.desc&limit=1`,{headers:serviceHeaders});
+      const q=await fetch(`${workoutsApi}?player_id=eq.${encodeURIComponent(player.id)}&select=id,created_at&order=created_at.desc&limit=1`,{headers:serviceHeaders});
+      if(!q.ok) throw new Error(await q.text());
       const arr=await q.json();
-      if(!arr.length) return new Response(JSON.stringify({ok:true,deleted:false}),{headers:jsonHeaders});
+      if(!arr.length || osloYmd(new Date(arr[0].created_at)) !== osloYmd(new Date())) {
+        return new Response(JSON.stringify({ok:true,deleted:false,reason:'NO_WORKOUT_TODAY',message:'Ingen økter registrert i dag'}),{headers:jsonHeaders});
+      }
       const r=await fetch(`${workoutsApi}?id=eq.${arr[0].id}`,{method:'DELETE',headers:serviceHeaders});
       return new Response(JSON.stringify({ok:r.ok,deleted:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders});
     }
