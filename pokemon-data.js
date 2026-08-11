@@ -19,6 +19,11 @@
   window.OBD_POKEMON=Object.freeze(names.map((name,id)=>id?Object.freeze({id,name,image:`dex-png/${id}.png`}):null));
   window.getPokemon=id=>window.OBD_POKEMON[Number(id)]||null;
 
+  if(!document.querySelector('link[href="pokemon-rarity.css"]')){
+    const rarityCss=document.createElement('link');
+    rarityCss.rel='stylesheet';rarityCss.href='pokemon-rarity.css';document.head.appendChild(rarityCss);
+  }
+
   const loadScript=(src,marker,onload)=>{
     if(document.querySelector(`script[${marker}]`)){onload?.();return}
     const s=document.createElement('script');s.src=src;s.setAttribute(marker,'1');if(onload)s.onload=onload;document.body.appendChild(s);
