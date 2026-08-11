@@ -1,5 +1,6 @@
 const API='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/training-tracker';
 const PEOPLE=['Rikard','Adrian'],RANKS=['Couch Recruit','Rep Collector','Hemorrhoid Pumper','Protein Junkie','Pump Chaser','Iron Disciple','Disciplined Lifter','Big Dawg','Meat Machine','Gym Warlord'];
+const rankForLevel=level=>RANKS[Math.min(RANKS.length,Math.max(1,Number(level)||1))-1]||RANKS[RANKS.length-1];
 const FORMS=[
 {body:'#ef4444',shorts:'#334155',s:0.62,sh:14,ch:16,wa:10,arm:3,leg:3.5,h:'none',a:'none',p:'slouch'},
 {body:'#f97316',shorts:'#1d4ed8',s:0.72,sh:16,ch:18,wa:11,arm:4,leg:4,h:'cap',a:'dumbbell',p:'left'},
@@ -39,7 +40,7 @@ const gained=d=>WEEK_XP[Math.max(0,Math.min(7,Number(d)||0))];
 const finalWeekXp=d=>d<=0?-6:gained(d);
 const nextImmediate=d=>{const n=Math.max(0,Math.min(7,Number(d)||0));return n>=7?0:gained(n+1)-gained(n)};
 const xpFor=(p,src=rows)=>{const m=weekMap(p,src);if(!m.size)return 0;const keys=[...m.keys()].sort(),end=currentWeek();let xp=0;weekKeysBetween(keys[0],end).forEach(k=>{const days=m.has(k)?m.get(k).size:0;xp+=k===end?gained(days):finalWeekXp(days)});return xp};
-const levelInfo=(p,src=rows)=>{const rawXp=xpFor(p,src),xp=Math.max(0,rawXp),level=Math.min(10,Math.floor(xp/10)+1),inLevel=level===10?10:(xp%10);return{xp,rawXp,level,inLevel,rank:RANKS[level-1]}};
+const levelInfo=(p,src=rows)=>{const rawXp=xpFor(p,src),xp=Math.max(0,rawXp),level=Math.floor(xp/10)+1,inLevel=xp%10;return{xp,rawXp,level,inLevel,rank:rankForLevel(level)}};
 const streakInfo=(p,src=rows)=>{const m=weekMap(p,src);if(!m.size)return{current:0,best:0};const keys=[...m.keys()].sort(),all=weekKeysBetween(keys[0],currentWeek());let best=0,run=0;all.forEach(k=>{if((m.get(k)?.size||0)>=3){run++;best=Math.max(best,run)}else run=0});let idx=all.length-1;if((m.get(currentWeek())?.size||0)<3)idx--;let current=0;for(;idx>=0;idx--){if((m.get(all[idx])?.size||0)>=3)current++;else break}return{current,best}};
 const typesThisWeek=p=>{const w=currentWeek(),r=rowsForPlayer(p).filter(x=>mondayKey(x.created_at)===w);return{strength:r.filter(x=>x.workout_type==='strength').length,cardio:r.filter(x=>x.workout_type==='cardio').length}};
 const verdict=n=>n===0?'No-show territory 💀':n===1?'Motoren er i gang.':n===2?'Én dag til sikrer streaken.':n===3?'Week secured 🔥':n===4?'Overachiever 🔥🔥':n>=7?'7/7 BIG DAWG 👑':'Big Dawg week 👑';
