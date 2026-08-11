@@ -7,6 +7,7 @@
   const rowsFor=person=>typeof rowsForPlayer==='function'?rowsForPlayer(person):[];
   const alreadyLogged=(person,type)=>rowsFor(person).some(r=>r.workout_type===type&&ymd(r.created_at)===today());
   const hasTodayWorkout=person=>rowsFor(person).some(r=>ymd(r.created_at)===today());
+  const shiftYmd=(value,days)=>typeof addDaysYmd==='function'?addDaysYmd(value,days):(()=>{const [y,m,d]=value.split('-').map(Number),dt=new Date(Date.UTC(y,m-1,d+days));return dt.toISOString().slice(0,10)})();
 
   const style=document.createElement('style');
   style.textContent=`
@@ -21,6 +22,7 @@
       transform:none!important;
     }
     .btn.daily-locked:hover,.btn.daily-locked:active{transform:none!important;box-shadow:none!important}
+    .edit-date-rule{display:block;margin-top:7px;color:#8ea3b8;font-size:11px;line-height:1.35}
   `;
   document.head.appendChild(style);
 
@@ -49,6 +51,37 @@
     });
   }
   window.applyDailyWorkoutLocks=applyDailyLocks;
+
+  function editBounds(row){
+    const original=ymd(row.created_at);
+    const min=shiftYmd(original,-7);
+    const plusSeven=shiftYmd(original,7);
+    const max=plusSeven<today()?plusSeven:today();
+    return{original,min,max};
+  }
+
+  function applyEditBounds(){
+    if(typeof editing==='undefined'||!editing)return;
+    const input=document.getElementById('editDate');
+    if(!input)return;
+    const bounds=editBounds(editing);
+    input.min=`${bounds.min}T00:00`;
+    input.max=`${bounds.max}T23:59`;
+    input.dataset.minDate=bounds.min;
+    input.dataset.maxDate=bounds.max;
+    const field=input.closest('.field');
+    if(field){
+      let note=field.querySelector('.edit-date-rule');
+      if(!note){note=document.createElement('small');note.className='edit-date-rule';field.appendChild(note)}
+      note.textContent=`Dato kan endres maks 7 dager fra originaldato (${bounds.original}), og aldri etter i dag. Tillatt: ${bounds.min} – ${bounds.max}.`;
+    }
+  }
+
+  if(typeof openEdit==='function'&&!window.__obdEditDatePatch){
+    window.__obdEditDatePatch=true;
+    const originalOpenEdit=openEdit;
+    openEdit=function(id){originalOpenEdit(id);applyEditBounds()};
+  }
 
   if(typeof renderPeople==='function'&&!window.__obdDailyLimitRenderPatch){
     window.__obdDailyLimitRenderPatch=true;
@@ -86,6 +119,20 @@
       e.stopImmediatePropagation();
       const msg='Ingen økter registrert i dag';
       if(typeof toast==='function')toast(msg);else alert(msg);
+      return;
+    }
+    if(e.target.closest('#saveEdit')){
+      const input=document.getElementById('editDate');
+      const value=input?.value||'';
+      const targetDate=value.slice(0,10);
+      const min=input?.dataset.minDate||'';
+      const max=input?.dataset.maxDate||'';
+      if(targetDate&&((min&&targetDate<min)||(max&&targetDate>max))){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const msg=targetDate>today()?'Dato kan ikke settes frem i tid':`Dato må være mellom ${min} og ${max}`;
+        if(typeof toast==='function')toast(msg);else alert(msg);
+      }
     }
   },true);
 
