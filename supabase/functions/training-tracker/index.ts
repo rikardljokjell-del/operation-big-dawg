@@ -95,6 +95,17 @@ async function ensureWeekCapacity(playerId: string, dateIso: string, excludeId?:
   if (days.size >= 7) throw new Error('WEEK_LIMIT');
 }
 
+async function ensureDailyTypeAvailable(playerId: string, dateIso: string, workoutType: string, excludeId?: string) {
+  const rows = await allRowsFor(playerId);
+  const targetDay = osloYmd(new Date(dateIso));
+  const duplicate = rows.some(row =>
+    row.id !== excludeId &&
+    row.workout_type === workoutType &&
+    osloYmd(new Date(row.created_at)) === targetDay
+  );
+  if (duplicate) throw new Error('DAILY_TYPE_LIMIT');
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null,{status:204,headers:cors});
   if (req.method === 'GET') return new Response(JSON.stringify({ok:true,service:'training-tracker'}),{headers:jsonHeaders});
@@ -189,8 +200,15 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
       }
       const createdAt = new Date().toISOString();
-      try { await ensureWeekCapacity(player.id, createdAt); }
+      try {
+        await ensureDailyTypeAvailable(player.id, createdAt, body.workout_type);
+        await ensureWeekCapacity(player.id, createdAt);
+      }
       catch (e) {
+        if (String(e).includes('DAILY_TYPE_LIMIT')) {
+          const label = body.workout_type === 'strength' ? 'Styrke' : 'Kondis';
+          return new Response(JSON.stringify({error:`${label} allerede registrert i dag`}),{status:409,headers:jsonHeaders});
+        }
         if (String(e).includes('WEEK_LIMIT')) return new Response(JSON.stringify({error:'Maks 7 tellende treningsdager per uke'}),{status:409,headers:jsonHeaders});
         throw e;
       }
@@ -219,8 +237,17 @@ Deno.serve(async (req: Request) => {
       const row = arr[0];
       const dt = new Date(body.created_at);
       if (Number.isNaN(dt.getTime())) return new Response(JSON.stringify({error:'Ugyldig dato'}),{status:400,headers:jsonHeaders});
-      try { await ensureWeekCapacity(row.player_id, dt.toISOString(), row.id); }
+      try {
+        const originalDay = osloYmd(new Date(row.created_at));
+        const targetDay = osloYmd(dt);
+        if (targetDay !== originalDay) await ensureDailyTypeAvailable(row.player_id, dt.toISOString(), row.workout_type, row.id);
+        await ensureWeekCapacity(row.player_id, dt.toISOString(), row.id);
+      }
       catch (e) {
+        if (String(e).includes('DAILY_TYPE_LIMIT')) {
+          const label = row.workout_type === 'strength' ? 'styrkeøkt' : 'kondisøkt';
+          return new Response(JSON.stringify({error:`Det finnes allerede en ${label} den dagen`}),{status:409,headers:jsonHeaders});
+        }
         if (String(e).includes('WEEK_LIMIT')) return new Response(JSON.stringify({error:'Den uken har allerede 7 tellende treningsdager'}),{status:409,headers:jsonHeaders});
         throw e;
       }
