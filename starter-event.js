@@ -4,13 +4,8 @@
 
   const API='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/starter-pokemon';
   const APP_PIN='1337';
-  const STARTERS={
-    4:{name:'Charmander',button:'red'},
-    1:{name:'Bulbasaur',button:'green'},
-    7:{name:'Squirtle',button:'blue'}
-  };
+  const STARTERS={4:{name:'Charmander',button:'red'},1:{name:'Bulbasaur',button:'green'},7:{name:'Squirtle',button:'blue'}};
   const starterMap=new Map();
-  let activeState=null;
   let refreshBusy=false;
 
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -39,9 +34,8 @@
   function close(){document.getElementById('starterEventOverlay')?.classList.remove('show');document.body.classList.remove('starter-modal-open')}
   const error=(msg='')=>{const el=document.getElementById('starterEventError');if(el)el.textContent=msg};
 
-  function showIntro(state){
-    activeState=state;
-    open(`<span class="starter-event-kicker">GYM INCIDENT</span><h2>You stole a RED gym bag from ASH at the gym.</h2><p>Something is crawling inside it....</p><div id="starterEventError" class="starter-event-error"></div><button id="starterOpenBag" class="starter-event-primary" type="button">OPEN BAG</button>`);
+  function showIntro(){
+    open(`<span class="starter-event-kicker">GYM INCIDENT</span><h2>You stole a RED gym bag from ASH at the gym.</h2><p>Something is crawling inside it....</p><div id="starterEventError" class="starter-event-error"></div><button id="starterOpenBag" class="starter-event-primary" type="button">Open bag</button>`);
     document.getElementById('starterOpenBag')?.addEventListener('click',showChoices);
   }
   function showChoices(){
@@ -49,8 +43,8 @@
     document.querySelectorAll('[data-starter-choice]').forEach(btn=>btn.addEventListener('click',()=>chooseStarter(Number(btn.dataset.starterChoice))));
   }
   function showSelected(state){
-    activeState=state;const id=Number(state.starter_pokemon),p=poke(id);
-    open(`<span class="starter-event-kicker">POKÉMON STOLEN</span><div class="starter-big-art"><img src="${p.image}" alt="${esc(p.name)}" draggable="false"></div><h2>${esc(p.name)}</h2><p>You got it. Don't stand around.</p><div id="starterEventError" class="starter-event-error"></div><button id="starterPutBag" class="starter-event-primary" type="button">PUT INSIDE GYM BAG</button>`);
+    const id=Number(state.starter_pokemon),p=poke(id);
+    open(`<span class="starter-event-kicker">POKÉMON STOLEN</span><div class="starter-big-art"><img src="${p.image}" alt="${esc(p.name)}" draggable="false"></div><h2>${esc(p.name)}</h2><div id="starterEventError" class="starter-event-error"></div><button id="starterPutBag" class="starter-event-primary" type="button">Put inside GYM BAG</button>`);
     document.getElementById('starterPutBag')?.addEventListener('click',completeStarter);
   }
   function showAchievement(){
@@ -70,8 +64,10 @@
     catch(e){error(e.message);if(btn)btn.disabled=false}
   }
 
-  function putCompanion(host,id,small=false){
-    if(!host||!id)return;host.classList.add('starter-companion-host');let badge=host.querySelector(':scope > .starter-companion');if(!badge){badge=document.createElement('span');badge.className='starter-companion';host.appendChild(badge)}const p=poke(id);badge.innerHTML=`<img src="${p.image}" alt="${esc(p.name)}" draggable="false">`;badge.title=p.name;
+  function putCompanion(host,id){
+    if(!host||!id)return;host.classList.add('starter-companion-host');let badge=host.querySelector(':scope > .starter-companion');if(!badge){badge=document.createElement('span');badge.className='starter-companion';host.appendChild(badge)}
+    if(badge.dataset.starterId===String(id))return;
+    const p=poke(id);badge.dataset.starterId=String(id);badge.innerHTML=`<img src="${p.image}" alt="${esc(p.name)}" draggable="false">`;badge.title=p.name;
   }
   function renderStarterBadge(){
     const data=starterMap.get(activeId()),wrap=document.getElementById('badges');if(!wrap)return;
@@ -85,7 +81,7 @@
       const id=Number(data.starter_pokemon);if(!id)continue;
       const player=window.getPlayers?.().find(p=>p.id===data.player_id||p.name===data.name);
       if(player){const card=document.getElementById('person'+player.name),host=card?.querySelector('.fighter-character');putCompanion(host,id)}
-      document.querySelectorAll(`[data-battle-player="${CSS.escape(String(data.player_id))}"]`).forEach(card=>putCompanion(card.querySelector('.battle-fighter-art'),id,true));
+      document.querySelectorAll(`[data-battle-player="${CSS.escape(String(data.player_id))}"]`).forEach(card=>putCompanion(card.querySelector('.battle-fighter-art'),id));
     }
     renderStarterBadge();
   }
@@ -97,11 +93,11 @@
   }
   async function resumeActive(){
     const id=activeId();if(!id)return;
-    try{const state=await api({action:'status',player_id:id});if(state?.triggered&&!state.completed){state.starter_pokemon?showSelected(state):showIntro(state)}}catch(e){console.warn('Starter status failed',e)}
+    try{const state=await api({action:'status',player_id:id});if(state?.triggered&&!state.completed){state.starter_pokemon?showSelected(state):showIntro()}}catch(e){console.warn('Starter status failed',e)}
   }
   async function armFromWorkout(detail){
     const id=detail?.playerId||activeId();if(!id||id!==activeId())return;
-    try{const state=await api({action:'arm',player_id:id});if(state?.triggered&&!state.completed){state.starter_pokemon?showSelected(state):showIntro(state)}}catch(e){console.warn('Starter arm failed',e)}
+    try{const state=await api({action:'arm',player_id:id});if(state?.triggered&&!state.completed){state.starter_pokemon?showSelected(state):showIntro()}}catch(e){console.warn('Starter arm failed',e)}
   }
 
   window.refreshStarterPokemon=refreshStarters;
@@ -117,4 +113,5 @@
   const fighters=document.querySelector('.fighters-stack');if(fighters)new MutationObserver(()=>setTimeout(renderStarterDecorations,0)).observe(fighters,{childList:true,subtree:true});
   const badges=document.getElementById('badges');if(badges)new MutationObserver(()=>setTimeout(renderStarterBadge,0)).observe(badges,{childList:true});
   [250,800,1800].forEach(ms=>setTimeout(refreshStarters,ms));
+  setTimeout(resumeActive,1100);
 })();
