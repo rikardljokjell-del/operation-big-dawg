@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Squirtle companion">
+  <defs>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#74d4ed"/><stop offset="1" stop-color="#3997c4"/></linearGradient>
+    <linearGradient id="shell" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b97b45"/><stop offset="1" stop-color="#7c4c2c"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="5" stdDeviation="5" flood-opacity=".28"/></filter>
+  </defs>
+  <g filter="url(#shadow)" stroke="#245f7c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M89 85c14 0 21 5 22 15-7-4-13-2-17 4 9 1 15 5 18 11-13 2-23-3-29-15" fill="url(#skin)"/>
+    <ellipse cx="62" cy="83" rx="35" ry="29" fill="url(#shell)" stroke="#624128"/>
+    <ellipse cx="62" cy="84" rx="25" ry="22" fill="#f4d79e" stroke="#b98c58"/>
+    <path d="M43 84h38M62 62v44M46 71l32 26M78 71 46 97" stroke="#c49c67" stroke-width="2" opacity=".8"/>
+    <path d="M38 54 28 41c9 0 15 3 20 9" fill="url(#skin)"/>
+    <path d="m86 54 10-13c-9 0-15 3-20 9" fill="url(#skin)"/>
+    <circle cx="62" cy="58" r="31" fill="url(#skin)"/>
+    <path d="M41 52c5-4 11-5 16-2" fill="none"/>
+    <path d="M68 50c6-3 12-2 17 2" fill="none"/>
+    <ellipse cx="49" cy="59" rx="5.5" ry="8" fill="#6d3343" stroke="none"/>
+    <ellipse cx="76" cy="59" rx="5.5" ry="8" fill="#6d3343" stroke="none"/>
+    <circle cx="47.5" cy="57" r="1.8" fill="#fff" stroke="none"/>
+    <circle cx="74.5" cy="57" r="1.8" fill="#fff" stroke="none"/>
+    <path d="M54 73c5 4 11 4 16 0" fill="none"/>
+    <path d="M31 84c-8 1-13 5-14 12 7-2 13 0 18 5" fill="url(#skin)"/>
+    <path d="M92 84c8 1 13 5 14 12-7-2-13 0-18 5" fill="url(#skin)"/>
+  </g>
+</svg>
