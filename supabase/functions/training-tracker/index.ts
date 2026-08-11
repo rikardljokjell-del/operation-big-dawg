@@ -38,6 +38,21 @@ function osloYmd(date: Date) {
   return `${v.year}-${v.month}-${v.day}`;
 }
 
+function shiftYmd(value: string, days: number) {
+  const [y,m,d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d+days));
+  return dt.toISOString().slice(0,10);
+}
+
+function editDateBounds(originalIso: string) {
+  const original = osloYmd(new Date(originalIso));
+  const min = shiftYmd(original,-7);
+  const plusSeven = shiftYmd(original,7);
+  const today = osloYmd(new Date());
+  const max = plusSeven < today ? plusSeven : today;
+  return {original,min,max,today};
+}
+
 function weekKey(input: string | Date) {
   const d = input instanceof Date ? input : new Date(input);
   const ymd = osloYmd(d);
@@ -240,9 +255,16 @@ Deno.serve(async (req: Request) => {
       const row = arr[0];
       const dt = new Date(body.created_at);
       if (Number.isNaN(dt.getTime())) return new Response(JSON.stringify({error:'Ugyldig dato'}),{status:400,headers:jsonHeaders});
+      const originalDay = osloYmd(new Date(row.created_at));
+      const targetDay = osloYmd(dt);
+      const bounds = editDateBounds(row.created_at);
+      if (targetDay < bounds.min || targetDay > bounds.max) {
+        const message = targetDay > bounds.today
+          ? 'Dato kan ikke settes frem i tid'
+          : `Dato kan bare endres maks 7 dager fra originaldato (${bounds.original}). Tillatt: ${bounds.min} – ${bounds.max}`;
+        return new Response(JSON.stringify({error:message}),{status:400,headers:jsonHeaders});
+      }
       try {
-        const originalDay = osloYmd(new Date(row.created_at));
-        const targetDay = osloYmd(dt);
         if (targetDay !== originalDay) await ensureDailyTypeAvailable(row.player_id, dt.toISOString(), row.workout_type, row.id);
         await ensureWeekCapacity(row.player_id, dt.toISOString(), row.id);
       }
