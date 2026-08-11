@@ -5,6 +5,35 @@
   if(typeof originalCall!=='function'||window.__obdTestDebugRouter)return;
   window.__obdTestDebugRouter=true;
 
+  let rewardSeq=0;
+  const rewardFromResponse=(payload,data,meta)=>{
+    if(payload?.action!=='add')return data;
+    const workout=data?.workout||(Array.isArray(data)?data[0]:null);
+    const reward={
+      seq:++rewardSeq,
+      playerId:meta?.id||payload?.player_id||workout?.player_id||window.getSelectedPlayerId?.()||'',
+      person:meta?.name||payload?.person||workout?.person||window.getSelectedPlayer?.()||'',
+      type:payload?.workout_type||workout?.workout_type||'',
+      eligible:data?.reward_eligible!==false,
+      rewardDate:data?.reward_date||'',
+      workoutId:workout?.id||'',
+      consumed:false
+    };
+    window.__obdLastWorkoutReward=reward;
+    return data;
+  };
+
+  window.consumeWorkoutRewardClaim=detail=>{
+    const reward=window.__obdLastWorkoutReward;
+    if(!reward||reward.consumed)return{eligible:true};
+    const d=detail||{},detailId=d.playerId||window.getSelectedPlayerId?.()||'',detailName=d.person||window.getSelectedPlayer?.()||'',detailType=d.type||'';
+    const samePlayer=(detailId&&reward.playerId)?detailId===reward.playerId:String(detailName||'').localeCompare(String(reward.person||''),'nb-NO',{sensitivity:'base'})===0;
+    const sameType=!detailType||!reward.type||detailType===reward.type;
+    if(!samePlayer||!sameType)return{eligible:true};
+    reward.consumed=true;
+    return{...reward};
+  };
+
   async function debugCall(payload){
     const response=await fetch(DEBUG_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const text=await response.text();
@@ -27,16 +56,18 @@
   }
 
   call=window.call=async function(payload,pinOverride){
-    const action=payload?.action;
+    const action=payload?.action,meta=targetMeta(payload);
     if(action==='add'||action==='undo'){
-      const meta=targetMeta(payload),name=meta?.name||payload?.person;
+      const name=meta?.name||payload?.person;
       if(isTestName(name)){
         const playerId=meta?.id||payload?.player_id||window.getSelectedPlayerId?.();
         if(!playerId)throw new Error('Test-spiller mangler player_id');
-        return debugCall({action,player_id:playerId,workout_type:payload?.workout_type});
+        const data=await debugCall({action,player_id:playerId,workout_type:payload?.workout_type});
+        return rewardFromResponse(payload,data,meta||{id:playerId,name});
       }
     }
-    return originalCall(payload,pinOverride);
+    const data=await originalCall(payload,pinOverride);
+    return rewardFromResponse(payload,data,meta);
   };
 
   function markDebugPlayer(){
