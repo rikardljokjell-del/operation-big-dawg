@@ -1,6 +1,8 @@
 (()=>{
   const STORE_KEY='obd_battle_players_v1';
+  const MANUAL_STORE_KEY='obd_battle_players_manual_v1';
   let memoryStore={};
+  let memoryManualStore={};
 
   if(!document.querySelector('link[href="battle-multi.css"]')){
     const link=document.createElement('link');
@@ -23,11 +25,28 @@
     memoryStore=map;
     try{localStorage.setItem(STORE_KEY,JSON.stringify(map))}catch{}
   };
+  const readManualMap=()=>{
+    try{return JSON.parse(localStorage.getItem(MANUAL_STORE_KEY)||'{}')||{}}catch{return memoryManualStore}
+  };
+  const writeManualMap=map=>{
+    memoryManualStore=map;
+    try{localStorage.setItem(MANUAL_STORE_KEY,JSON.stringify(map))}catch{}
+  };
+
+  function defaultSelection(all,active){
+    if(!active)return [];
+    const ids=[active.id,...all.filter(p=>p.id!==active.id).map(p=>p.id)].slice(0,6);
+    return ids.map(id=>all.find(p=>p.id===id)).filter(Boolean);
+  }
 
   function selectionForActive(){
     const all=players(),active=activeMeta();
     if(!active)return [];
-    const map=readMap(),stored=Array.isArray(map[active.id])?map[active.id]:[];
+    const map=readMap(),manualMap=readManualMap();
+    const hasManualSelection=manualMap[active.id]===true;
+    if(!hasManualSelection)return defaultSelection(all,active);
+
+    const stored=Array.isArray(map[active.id])?map[active.id]:[];
     const available=new Set(all.map(p=>p.id));
     let ids=[active.id,...stored.filter(id=>id!==active.id&&available.has(id))];
     ids=[...new Set(ids)].slice(0,6);
@@ -35,13 +54,7 @@
       const firstOther=all.find(p=>p.id!==active.id);
       if(firstOther)ids.push(firstOther.id);
     }
-    const selected=ids.map(id=>all.find(p=>p.id===id)).filter(Boolean);
-    const normalized=selected.map(p=>p.id);
-    if(JSON.stringify(stored)!==JSON.stringify(normalized)){
-      map[active.id]=normalized;
-      writeMap(map);
-    }
-    return selected;
+    return ids.map(id=>all.find(p=>p.id===id)).filter(Boolean);
   }
 
   window.getBattlePlayers=()=>selectionForActive().map(p=>({...p}));
@@ -214,6 +227,7 @@
     const available=new Set(all.map(p=>p.id));
     const ids=[active.id,...checked.filter(id=>id!==active.id&&available.has(id))].slice(0,6);
     const map=readMap();map[active.id]=[...new Set(ids)];writeMap(map);
+    const manualMap=readManualMap();manualMap[active.id]=true;writeManualMap(manualMap);
     closePicker();
     renderBattleSummary();
     window.dispatchEvent(new CustomEvent('obd-battle-changed',{detail:{playerId:active.id,playerIds:map[active.id]}}));
