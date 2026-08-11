@@ -5,8 +5,10 @@
 
   const today=()=>typeof ymd==='function'?ymd(new Date()):new Date().toISOString().slice(0,10);
   const rowsFor=person=>typeof rowsForPlayer==='function'?rowsForPlayer(person):[];
+  const isDebugTest=person=>String(person||'').trim().toLocaleLowerCase('nb-NO')==='test';
   const alreadyLogged=(person,type)=>rowsFor(person).some(r=>r.workout_type===type&&ymd(r.created_at)===today());
   const hasTodayWorkout=person=>rowsFor(person).some(r=>ymd(r.created_at)===today());
+  const hasAnyWorkout=person=>rowsFor(person).length>0;
   const shiftYmd=(value,days)=>typeof addDaysYmd==='function'?addDaysYmd(value,days):(()=>{const [y,m,d]=value.split('-').map(Number),dt=new Date(Date.UTC(y,m-1,d+days));return dt.toISOString().slice(0,10)})();
 
   const style=document.createElement('style');
@@ -32,10 +34,11 @@
       const person=btn.dataset.person;
       if(!type||!person)return;
       if(!originalText.has(btn))originalText.set(btn,btn.textContent);
-      const locked=alreadyLogged(person,type);
+      const debug=isDebugTest(person);
+      const locked=!debug&&alreadyLogged(person,type);
       btn.classList.toggle('daily-locked',locked);
       btn.setAttribute('aria-disabled',locked?'true':'false');
-      btn.title=locked?`${LABEL[type]} allerede registrert i dag`:'';
+      btn.title=debug?'DEBUG: hvert trykk registreres som en ny treningsdag':locked?`${LABEL[type]} allerede registrert i dag`:'';
       btn.textContent=locked?`✓ ${LABEL[type]} registrert`:originalText.get(btn);
     });
 
@@ -43,10 +46,11 @@
       const person=btn.dataset.undo;
       if(!person)return;
       if(!undoText.has(btn))undoText.set(btn,btn.textContent);
-      const locked=!hasTodayWorkout(person);
+      const debug=isDebugTest(person);
+      const locked=debug?!hasAnyWorkout(person):!hasTodayWorkout(person);
       btn.classList.toggle('daily-locked',locked);
       btn.setAttribute('aria-disabled',locked?'true':'false');
-      btn.title=locked?'Ingen økter registrert i dag':'';
+      btn.title=locked?(debug?'Ingen debugøkter registrert':'Ingen økter registrert i dag'):debug?'DEBUG: angrer siste simulerte klikk':'';
       btn.textContent=undoText.get(btn);
     });
   }
@@ -93,6 +97,15 @@
     window.__obdUndoTodayPatch=true;
     const originalUndo=undoWorkout;
     undoWorkout=async function(person){
+      if(isDebugTest(person)){
+        if(!hasAnyWorkout(person)){
+          if(typeof toast==='function')toast('Ingen debugøkter registrert');
+          else alert('Ingen debugøkter registrert');
+          applyDailyLocks();
+          return;
+        }
+        return originalUndo(person);
+      }
       if(!hasTodayWorkout(person)){
         if(typeof toast==='function')toast('Ingen økter registrert i dag');
         else alert('Ingen økter registrert i dag');
@@ -117,7 +130,7 @@
     if(undoBtn){
       e.preventDefault();
       e.stopImmediatePropagation();
-      const msg='Ingen økter registrert i dag';
+      const msg=isDebugTest(undoBtn.dataset.undo)?'Ingen debugøkter registrert':'Ingen økter registrert i dag';
       if(typeof toast==='function')toast(msg);else alert(msg);
       return;
     }
