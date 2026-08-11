@@ -19,7 +19,7 @@
   window.OBD_POKEMON=Object.freeze(names.map((name,id)=>id?Object.freeze({id,name,image:`dex-png/${id}.png`}):null));
   window.getPokemon=id=>window.OBD_POKEMON[Number(id)]||null;
   if(new URLSearchParams(location.search).get('bossTest')==='1'&&!document.querySelector('script[data-obd-gym-xp-test]')){
-    try{if(!localStorage.getItem('obd_gym_test_xp_v1'))localStorage.removeItem('obd_gym_test_v4')}catch{}
+    try{if(!localStorage.getItem('obd_gym_test_xp_v2')){localStorage.removeItem('obd_gym_test_xp_v1');localStorage.removeItem('obd_gym_test_v4');localStorage.removeItem('obd_gym_test_v5')}}catch{}
     setTimeout(()=>{const s=document.createElement('script');s.src='boss-test-xp.js';s.dataset.obdGymXpTest='1';document.body.appendChild(s)},0);
   }
 })();
