@@ -28,5 +28,6 @@
     try{if(!localStorage.getItem('obd_gym_test_xp_v3')){localStorage.removeItem('obd_gym_test_xp_v1');localStorage.removeItem('obd_gym_test_xp_v2');localStorage.removeItem('obd_gym_test_v4');localStorage.removeItem('obd_gym_test_v5')}}catch{}
     loadScript('boss-test-xp.js','data-obd-gym-xp-test');
   };
-  loadScript('progression-unbounded.js','data-obd-unbounded-progression',loadTest);
+  const loadProgression=()=>loadScript('progression-unbounded.js','data-obd-unbounded-progression',loadTest);
+  loadScript('test-debug.js','data-obd-test-debug-router',loadProgression);
 })();
