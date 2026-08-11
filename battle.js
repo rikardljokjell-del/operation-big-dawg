@@ -88,7 +88,6 @@
     left.textContent=total>=target?'':`${milestone-total} igjen`;
   }
 
-  // Replace the old 100-day hero calculation once battle.js has loaded.
   if(typeof renderHero==='function')renderHero=renderBattleGoalHero;
 
   function leaderText(selected){
@@ -247,4 +246,19 @@
   setTimeout(renderBattleSummary,100);
   setTimeout(renderBattleSummary,600);
   setInterval(renderBattleSummary,15000);
+})();
+
+// Preview-only Gym Leader runtime. Kept out of main index.html so the preview stays rebased cleanly on production.
+(()=>{
+  if(window.__obdGymPreviewLoader)return;
+  window.__obdGymPreviewLoader=true;
+  if(!document.querySelector('link[href="boss.css"]')){
+    const css=document.createElement('link');css.rel='stylesheet';css.href='boss.css';document.head.appendChild(css);
+  }
+  const loadGym=()=>{
+    if(document.querySelector('script[data-obd-gym-runtime]'))return;
+    const gym=document.createElement('script');gym.src='boss.js';gym.dataset.obdGymRuntime='1';document.body.appendChild(gym);
+  };
+  if(window.OBD_POKEMON){loadGym();return}
+  const data=document.createElement('script');data.src='pokemon-data.js';data.dataset.obdPokemonData='1';data.onload=loadGym;data.onerror=loadGym;document.body.appendChild(data);
 })();
