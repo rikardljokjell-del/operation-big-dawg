@@ -50,3 +50,5 @@
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule()});
   [0,120,450,1200].forEach(ms=>setTimeout(apply,ms));
 })();
+
+// Preview redeploy trigger: 2026-08-12
