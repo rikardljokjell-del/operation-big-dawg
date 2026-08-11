@@ -6,7 +6,7 @@
   const APP_PIN='1337';
   const STARTERS={4:{name:'Charmander',button:'red'},1:{name:'Bulbasaur',button:'green'},7:{name:'Squirtle',button:'blue'}};
   const starterMap=new Map();
-  let refreshBusy=false;
+  let refreshBusy=false,priorityPlayerId='';
 
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const activeId=()=>window.getSelectedPlayerId?.()||'';
@@ -36,6 +36,7 @@
     window.__obdStarterDeferredPayoff=null;
     window.__obdStarterDeferredEvolution=null;
     window.__obdStarterDeferredAchievement=null;
+    priorityPlayerId='';
     setPriority(false);
     if(payoff)window.dispatchEvent(new CustomEvent('obd-starter-story-complete',{detail:payoff}));
     if(evolution)setTimeout(()=>window.showEvolution?.(...evolution),payoff?1550:120);
@@ -59,7 +60,7 @@
     if(!overlay){overlay=document.createElement('div');overlay.id='starterEventOverlay';overlay.className='starter-event-overlay';overlay.innerHTML='<div id="starterEventCard" class="starter-event-card" role="dialog" aria-modal="true"></div>';document.body.appendChild(overlay)}
     return overlay;
   }
-  function open(html){setPriority(true);const overlay=ensureUi(),card=document.getElementById('starterEventCard');card.innerHTML=html;overlay.classList.add('show');document.body.classList.add('starter-modal-open')}
+  function open(html){setPriority(true);priorityPlayerId=activeId()||priorityPlayerId;const overlay=ensureUi(),card=document.getElementById('starterEventCard');card.innerHTML=html;overlay.classList.add('show');document.body.classList.add('starter-modal-open')}
   function close(){document.getElementById('starterEventOverlay')?.classList.remove('show');document.body.classList.remove('starter-modal-open')}
   const error=(msg='')=>{const el=document.getElementById('starterEventError');if(el)el.textContent=msg};
 
@@ -122,28 +123,51 @@
   }
   async function resumeActive(){
     const id=activeId();if(!id)return;
-    try{const state=await api({action:'status',player_id:id});if(state?.triggered&&!state.completed){setPriority(true);state.starter_pokemon?showSelected(state):showIntro()}}catch(e){console.warn('Starter status failed',e)}
+    try{const state=await api({action:'status',player_id:id});if(state?.triggered&&!state.completed){priorityPlayerId=id;setPriority(true);state.starter_pokemon?showSelected(state):showIntro()}}catch(e){console.warn('Starter status failed',e)}
   }
   async function armFromWorkout(detail){
     const id=detail?.playerId||activeId();if(!id||id!==activeId())return;
     const person=detail?.person||activeName();
     const workoutCount=typeof rowsForPlayer==='function'?rowsForPlayer(person).length:0;
     const fourthWorkout=workoutCount===4;
-    if(fourthWorkout){setPriority(true);showIntro()}
+    if(fourthWorkout&&!(window.__obdStarterStoryPriority&&priorityPlayerId===id)){priorityPlayerId=id;setPriority(true);showIntro()}
     try{
       const state=await api({action:'arm',player_id:id});
-      if(state?.triggered&&!state.completed){setPriority(true);if(state.starter_pokemon)showSelected(state);else if(!fourthWorkout)showIntro()}
+      if(state?.triggered&&!state.completed){priorityPlayerId=id;setPriority(true);if(state.starter_pokemon)showSelected(state);else if(!fourthWorkout&&!document.getElementById('starterEventOverlay')?.classList.contains('show'))showIntro()}
       else if(fourthWorkout){close();releasePriority()}
     }catch(e){console.warn('Starter arm failed',e)}
   }
 
+  function installWorkoutCommitHook(attempt=0){
+    if(window.__obdStarterWorkoutCommitHook)return;
+    if(!window.__obdTestDebugRouter&&attempt<40){setTimeout(()=>installWorkoutCommitHook(attempt+1),50);return}
+    const originalCall=window.call;
+    if(typeof originalCall!=='function'){if(attempt<60)setTimeout(()=>installWorkoutCommitHook(attempt+1),50);return}
+    window.__obdStarterWorkoutCommitHook=true;
+    call=window.call=async function(payload,pinOverride){
+      const isAdd=payload?.action==='add';
+      const person=payload?.person||activeName();
+      const id=payload?.player_id||window.getPlayerMeta?.(person)?.id||activeId();
+      const beforeCount=isAdd&&typeof rowsForPlayer==='function'?rowsForPlayer(person).length:-1;
+      const data=await originalCall(payload,pinOverride);
+      if(isAdd&&beforeCount===3&&id&&id===activeId()){
+        priorityPlayerId=id;
+        setPriority(true);
+        showIntro();
+        api({action:'arm',player_id:id}).catch(e=>console.warn('Starter immediate arm failed',e));
+      }
+      return data;
+    };
+  }
+
   installPriorityHooks();
+  installWorkoutCommitHook();
   window.refreshStarterPokemon=refreshStarters;
   window.renderStarterPokemon=renderStarterDecorations;
   window.handleStarterWorkoutEvent=armFromWorkout;
   window.addEventListener('obd-workout-added',e=>armFromWorkout(e.detail||{}));
-  window.addEventListener('obd-auth-ready',()=>{setTimeout(refreshStarters,150);setTimeout(resumeActive,500)});
-  window.addEventListener('obd-player-changed',()=>{close();setPriority(false);setTimeout(refreshStarters,80);setTimeout(resumeActive,250)});
+  window.addEventListener('obd-auth-ready',()=>{installWorkoutCommitHook();setTimeout(refreshStarters,150);setTimeout(resumeActive,500)});
+  window.addEventListener('obd-player-changed',()=>{close();priorityPlayerId='';setPriority(false);setTimeout(refreshStarters,80);setTimeout(resumeActive,250)});
   window.addEventListener('obd-battle-changed',()=>setTimeout(renderStarterDecorations,30));
   window.addEventListener('pageshow',()=>setTimeout(refreshStarters,250));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(refreshStarters,120)});
