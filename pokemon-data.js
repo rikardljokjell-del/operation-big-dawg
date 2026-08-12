@@ -43,7 +43,21 @@
   const loadOnboarding=()=>loadScript('onboarding-access.js','data-obd-onboarding-access',loadDebug);
   const loadCompanionArt=()=>loadScript('starter-companion-art.js','data-obd-starter-companion-art',loadOnboarding);
   const loadPokemonGameplayFix=()=>loadScript('pokemon-gameplay-v2-fix.js','data-obd-pokemon-gameplay-v2-fix',loadCompanionArt);
-  const loadPokemonGameplay=()=>loadScript('pokemon-gameplay-v2.js','data-obd-pokemon-gameplay-v2',loadPokemonGameplayFix);
+  const loadPokemonGameplay=()=>{
+    // pokemon-gameplay-v2 used to attach a MutationObserver to #fighters and then
+    // mutate the same subtree while rendering stat bonuses. On some phones this
+    // created a self-triggering microtask loop that could freeze the page after
+    // Wild/Gym state syncs. Keep #fighters temporarily out of that observer's
+    // lookup while the runtime initializes; all stat bonuses still render from
+    // the normal sync/update hooks.
+    const fighters=document.getElementById('fighters');
+    const originalId=fighters?.id||'';
+    if(fighters)fighters.id='fighters-observer-paused';
+    loadScript('pokemon-gameplay-v2.js','data-obd-pokemon-gameplay-v2',()=>{
+      if(fighters&&fighters.id==='fighters-observer-paused')fighters.id=originalId||'fighters';
+      loadPokemonGameplayFix();
+    });
+  };
   const loadGymFlow=()=>loadScript('gym-flow-polish.js','data-obd-gym-flow-polish',loadPokemonGameplay);
   loadScript('starter-event.js','data-obd-starter-event',loadGymFlow);
 })();
