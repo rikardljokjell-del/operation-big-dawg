@@ -42,7 +42,8 @@
   const loadDebug=()=>loadScript('test-debug.js','data-obd-test-debug-router',loadProgression);
   const loadOnboarding=()=>loadScript('onboarding-access.js','data-obd-onboarding-access',loadDebug);
   const loadCompanionArt=()=>loadScript('starter-companion-art.js','data-obd-starter-companion-art',loadOnboarding);
-  const loadPokemonGameplay=()=>loadScript('pokemon-gameplay-v2.js','data-obd-pokemon-gameplay-v2',loadCompanionArt);
+  const loadPokemonGameplayFix=()=>loadScript('pokemon-gameplay-v2-fix.js','data-obd-pokemon-gameplay-v2-fix',loadCompanionArt);
+  const loadPokemonGameplay=()=>loadScript('pokemon-gameplay-v2.js','data-obd-pokemon-gameplay-v2',loadPokemonGameplayFix);
   const loadGymFlow=()=>loadScript('gym-flow-polish.js','data-obd-gym-flow-polish',loadPokemonGameplay);
   loadScript('starter-event.js','data-obd-starter-event',loadGymFlow);
 })();
