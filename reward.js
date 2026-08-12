@@ -162,15 +162,28 @@
     }
   });
 
+  const gymShouldDefer=detail=>typeof window.shouldDeferWorkoutPayoffForGym==='function'&&window.shouldDeferWorkoutPayoffForGym(detail);
+  const deferForGym=detail=>{window.__obdGymDeferredPayoff=detail;};
+
   window.renderRewardEngine=renderRewardEngine;
   window.addEventListener('obd-workout-added',e=>{
     const detail=e.detail||{};
     setTimeout(()=>{
       if(window.__obdStarterStoryPriority){window.__obdStarterDeferredPayoff=detail;return}
+      if(gymShouldDefer(detail)){deferForGym(detail);return}
       showWorkoutPayoff(detail);
     },0);
   });
-  window.addEventListener('obd-starter-story-complete',e=>showWorkoutPayoff(e.detail||{}));
+  window.addEventListener('obd-starter-story-complete',e=>{
+    const detail=e.detail||{};
+    if(gymShouldDefer(detail)){deferForGym(detail);return}
+    showWorkoutPayoff(detail);
+  });
+  window.addEventListener('obd-gym-flow-complete',e=>{
+    const detail=window.__obdGymDeferredPayoff||e.detail||{};
+    window.__obdGymDeferredPayoff=null;
+    showWorkoutPayoff(detail);
+  });
   window.addEventListener('obd-player-changed',renderRewardEngine);
   window.addEventListener('pageshow',renderRewardEngine);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderRewardEngine()});

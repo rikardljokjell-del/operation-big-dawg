@@ -63,6 +63,19 @@ async function save(id:string,b:any,level:number){
   return await patchState(id,body);
 }
 
+async function markFirstFight(id:string){
+  const s=await state(id);
+  if(s.first_gym_fight_at)return s;
+  return await patchState(id,{first_gym_fight_at:new Date().toISOString(),version:Number(s.version||1)+1});
+}
+
+async function unlockGymDex(id:string){
+  const s=await state(id);
+  if(s.gymdex_unlocked_at)return s;
+  const now=new Date().toISOString();
+  return await patchState(id,{first_gym_fight_at:s.first_gym_fight_at||now,gymdex_unlocked_at:now,version:Number(s.version||1)+1});
+}
+
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
   if(req.method==='GET')return out({ok:true,mode:'per-player-server-loot'});
@@ -73,6 +86,8 @@ Deno.serve(async(req:Request)=>{
     const level=Math.max(1,Math.floor(Number(b.level)||1));
     if(b.action==='get')return out({player:await ensureEncounter(id,level)});
     if(b.action==='save_player')return out({player:await save(id,b.state||{},level)});
+    if(b.action==='mark_first_fight')return out({player:await markFirstFight(id)});
+    if(b.action==='unlock_gymdex')return out({player:await unlockGymDex(id)});
     return out({error:'Bad request'},400);
   }catch(e){console.error(e);return out({error:'Server error'},500)}
 });

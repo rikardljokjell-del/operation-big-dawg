@@ -19,6 +19,11 @@
   window.OBD_POKEMON=Object.freeze(names.map((name,id)=>id?Object.freeze({id,name,image:`dex-png/${id}.png`}):null));
   window.getPokemon=id=>window.OBD_POKEMON[Number(id)]||null;
 
+  if(!window.__obdGymWorkoutBridge){
+    window.__obdGymWorkoutBridge=true;
+    window.addEventListener('obd-workout-added',e=>window.__obdGymFlowHandleWorkout?.(e.detail||{}));
+  }
+
   if(!document.querySelector('link[href="pokemon-rarity.css"]')){
     const rarityCss=document.createElement('link');
     rarityCss.rel='stylesheet';rarityCss.href='pokemon-rarity.css';document.head.appendChild(rarityCss);
@@ -37,5 +42,6 @@
   const loadDebug=()=>loadScript('test-debug.js','data-obd-test-debug-router',loadProgression);
   const loadOnboarding=()=>loadScript('onboarding-access.js','data-obd-onboarding-access',loadDebug);
   const loadCompanionArt=()=>loadScript('starter-companion-art.js','data-obd-starter-companion-art',loadOnboarding);
-  loadScript('starter-event.js','data-obd-starter-event',loadCompanionArt);
+  const loadGymFlow=()=>loadScript('gym-flow-polish.js','data-obd-gym-flow-polish',loadCompanionArt);
+  loadScript('starter-event.js','data-obd-starter-event',loadGymFlow);
 })();
