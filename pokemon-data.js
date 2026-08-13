@@ -43,7 +43,8 @@
   const loadOnboarding=()=>loadScript('onboarding-access.js','data-obd-onboarding-access',loadDebug);
   const loadCompanionArt=()=>loadScript('starter-companion-art.js','data-obd-starter-companion-art',loadOnboarding);
   const loadStatBenefitStability=()=>loadScript('stats-benefit-stability.js','data-obd-stat-benefit-stability',loadCompanionArt);
-  const loadStatBalance=()=>loadScript('stat-balance-v2.js','data-obd-stat-balance-v2',loadStatBenefitStability);
+  const loadStatsLevelLock=()=>loadScript('stats-level-lock.js','data-obd-stats-level-lock',loadStatBenefitStability);
+  const loadStatBalance=()=>loadScript('stat-balance-v2.js','data-obd-stat-balance-v2',loadStatsLevelLock);
   const loadPokemonGameplayFix=()=>loadScript('pokemon-gameplay-v2-fix.js','data-obd-pokemon-gameplay-v2-fix',loadStatBalance);
   const loadPokemonGameplay=()=>{
     // pokemon-gameplay-v2 used to attach a MutationObserver to #fighters and then
