@@ -70,6 +70,7 @@
   window.addEventListener('obd-auth-ready',()=>setTimeout(loadBenefits,120));
   window.addEventListener('obd-player-changed',()=>{benefits=null;setTimeout(loadBenefits,100)});
   window.addEventListener('obd-workout-added',()=>setTimeout(loadBenefits,180));
+  window.addEventListener('obd-stats-build-saved',()=>setTimeout(loadBenefits,120));
   window.addEventListener('pageshow',()=>setTimeout(loadBenefits,160));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(loadBenefits,100)});
   [0,120,350,900].forEach(ms=>setTimeout(()=>{schedule();if(ms===120||ms===900)loadBenefits()},ms));
