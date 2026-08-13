@@ -59,5 +59,6 @@
     });
   };
   const loadGymFlow=()=>loadScript('gym-flow-polish.js','data-obd-gym-flow-polish',loadPokemonGameplay);
-  loadScript('starter-event.js','data-obd-starter-event',loadGymFlow);
+  const loadStarterProgression=()=>loadScript('starter-pokemon-progression.js','data-obd-starter-pokemon-progression',loadGymFlow);
+  loadScript('starter-event.js','data-obd-starter-event',loadStarterProgression);
 })();
