@@ -3,6 +3,7 @@
   window.__obdStatBalanceV2=true;
 
   const THRESHOLDS={medium:8,high:15,max:23};
+  const CUTS=[THRESHOLDS.medium,THRESHOLDS.high,THRESHOLDS.max];
   const tierFor=value=>Number(value)>=THRESHOLDS.max?3:Number(value)>=THRESHOLDS.high?2:Number(value)>=THRESHOLDS.medium?1:0;
   const LABELS=['LOW','MEDIUM','HIGH','MAX'];
   const POWER=[65,75,85,100];
@@ -14,13 +15,18 @@
   window.OBD_STAT_TIER_THRESHOLDS=Object.freeze({...THRESHOLDS});
   window.OBD_STAT_TIER_INDEX=tierFor;
 
+  function effect(key,i){
+    if(key==='power')return `${POWER[i]}% catch rate`;
+    if(key==='engine')return `${ENGINE[i]} extra shuffle${ENGINE[i]===1?'':'s'}`;
+    if(key==='discipline')return `${DISCIPLINE[i]}% snipe success`;
+    if(key==='grit')return `+${GRIT[i]}% rare chance`;
+    return '';
+  }
   function benefitText(key,value){
     const i=tierFor(value),tier=LABELS[i];
-    if(key==='power')return `WILD CATCH · <b>${tier}</b> (${POWER[i]}% catch rate)`;
-    if(key==='engine')return `GYM LOOT · <b>${tier}</b> (${ENGINE[i]} extra shuffle${ENGINE[i]===1?'':'s'})`;
-    if(key==='discipline')return `SNIPE · <b>${tier}</b> (${DISCIPLINE[i]}% success)`;
-    if(key==='grit')return `RARE GYM POKÉMON · <b>${tier}</b> (+${GRIT[i]}% rare chance)`;
-    return '';
+    const head=key==='power'?'WILD CATCH':key==='engine'?'GYM LOOT':key==='discipline'?'SNIPE':'RARE GYM POKÉMON';
+    const next=i>=3?'<em>MAXED · no further upgrade</em>':`<em>${Math.max(1,Math.ceil(CUTS[i]-Number(value||0)))} AP TO ${LABELS[i+1]} · NEXT: ${effect(key,i+1)}</em>`;
+    return `${head} · <b>${tier}</b> (${effect(key,i)})${next}`;
   }
 
   function previewValues(){
@@ -53,6 +59,7 @@
     const s=document.createElement('style');s.id='statBalanceV2Style';s.textContent=`
       .stats-ap-live-benefit{display:block!important;margin-top:5px!important;padding:5px 7px;border-radius:7px;background:#07131c;color:#8eb4ce!important;font-size:7px!important;font-weight:900!important;line-height:1.25}
       .stats-ap-live-benefit b{color:#fff}
+      .stats-ap-live-benefit em{display:block;margin-top:3px;color:#ffd86b;font-style:normal;font-size:6px;letter-spacing:.04em}
     `;document.head.appendChild(s);
   }
 

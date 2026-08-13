@@ -4,6 +4,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const APP_PIN = Deno.env.get('APP_PIN') || '1337';
 const playersApi = `${SUPABASE_URL}/rest/v1/players`;
+const workoutsApi = `${SUPABASE_URL}/rest/v1/workouts`;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +19,7 @@ const serviceHeaders = {
 };
 
 const emptyAlloc = () => ({power:0,engine:0,discipline:0,grit:0});
+const WEEK_XP=[0,4,7,10,12,13,14,15];
 
 function normalizeAlloc(value: unknown) {
   const src = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -27,45 +29,93 @@ function normalizeAlloc(value: unknown) {
     if (!Number.isInteger(n) || n < 0) throw new Error('INVALID_ALLOC');
     alloc[key] = n;
   }
-  const spent = Object.values(alloc).reduce((a,b)=>a+b,0);
-  if (spent > 19) throw new Error('INVALID_ALLOC');
   return alloc;
+}
+function totalAp(level:number){return level<2?0:3+Math.max(0,level-2)*2}
+function osloYmd(input:Date|string){
+  const d=input instanceof Date?input:new Date(input);
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Oslo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+  const v:any={};for(const p of parts)if(p.type!=='literal')v[p.type]=p.value;
+  return `${v.year}-${v.month}-${v.day}`;
+}
+function mondayKey(input:Date|string){
+  const s=osloYmd(input),[y,m,d]=s.split('-').map(Number),x=new Date(Date.UTC(y,m-1,d)),dow=x.getUTCDay()||7;
+  x.setUTCDate(x.getUTCDate()-(dow-1));return x.toISOString().slice(0,10);
+}
+function addDaysYmd(s:string,n:number){const [y,m,d]=s.split('-').map(Number),x=new Date(Date.UTC(y,m-1,d+n));return x.toISOString().slice(0,10)}
+function gained(days:number){return WEEK_XP[Math.max(0,Math.min(7,days||0))]}
+function finalWeekXp(days:number){return days<=0?-6:gained(days)}
+async function api(url:string,init:RequestInit={}){
+  const r=await fetch(url,{...init,headers:{...serviceHeaders,...(init.headers||{})}}),t=await r.text();
+  if(!r.ok)throw new Error(t||`REST ${r.status}`);return t?JSON.parse(t):null;
+}
+async function currentLevel(playerId:string){
+  const rows=await api(`${workoutsApi}?player_id=eq.${encodeURIComponent(playerId)}&select=created_at&order=created_at.asc`)||[];
+  if(!rows.length)return 1;
+  const weeks=new Map<string,Set<string>>();
+  for(const row of rows){const wk=mondayKey(row.created_at),day=osloYmd(row.created_at);if(!weeks.has(wk))weeks.set(wk,new Set());weeks.get(wk)!.add(day)}
+  const keys=[...weeks.keys()].sort(),end=mondayKey(new Date());let xp=0,k=keys[0];
+  while(k<=end){const days=weeks.get(k)?.size||0;xp+=k===end?gained(days):finalWeekXp(days);k=addDaysYmd(k,7)}
+  return Math.floor(Math.max(0,xp)/10)+1;
+}
+async function getPlayer(playerId:string){
+  const rows=await api(`${playersApi}?id=eq.${encodeURIComponent(playerId)}&select=id,stats_alloc,stats_build_open_level,stats_build_saved_level&limit=1`)||[];
+  return rows[0]||null;
+}
+function responseState(row:any,level:number){
+  const open=Number(row?.stats_build_open_level)||null,saved=Number(row?.stats_build_saved_level)||null;
+  return {
+    ok:true,
+    stats_alloc:normalizeAlloc(row?.stats_alloc),
+    current_level:level,
+    total_ap:totalAp(level),
+    build_open:level>=2&&open===level&&saved!==level,
+    build_open_level:open,
+    build_saved_level:saved,
+    next_build_level:Math.max(level+1,(saved||1)+1)
+  };
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null,{status:204,headers:cors});
-  if (req.method === 'GET') return new Response(JSON.stringify({ok:true,service:'player-stats'}),{headers:jsonHeaders});
+  if (req.method === 'GET') return new Response(JSON.stringify({ok:true,service:'player-stats-level-lock-v2'}),{headers:jsonHeaders});
   if (req.method !== 'POST') return new Response(JSON.stringify({error:'Method not allowed'}),{status:405,headers:jsonHeaders});
 
   try {
     const body = await req.json();
-    if (String(body.pin || '') !== APP_PIN) {
-      return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
-    }
+    if (String(body.pin || '') !== APP_PIN) return new Response(JSON.stringify({error:'Feil PIN'}),{status:403,headers:jsonHeaders});
     const playerId = String(body.player_id || '');
     if (!playerId) return new Response(JSON.stringify({error:'player_id required'}),{status:400,headers:jsonHeaders});
+    const row=await getPlayer(playerId);if(!row)return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});
+    const level=await currentLevel(playerId);
 
-    if (body.action === 'get') {
-      const r = await fetch(`${playersApi}?id=eq.${encodeURIComponent(playerId)}&select=id,stats_alloc&limit=1`,{headers:serviceHeaders});
-      if (!r.ok) return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
-      const rows = await r.json();
-      if (!rows.length) return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});
-      return new Response(JSON.stringify({ok:true,stats_alloc:normalizeAlloc(rows[0].stats_alloc)}),{headers:jsonHeaders});
+    if (body.action === 'get') return new Response(JSON.stringify(responseState(row,level)),{headers:jsonHeaders});
+
+    if (body.action === 'unlock') {
+      if(level<2)return new Response(JSON.stringify({...responseState(row,level),error:'Stats låses opp på Level 2'}),{headers:jsonHeaders});
+      const saved=Number(row.stats_build_saved_level)||0;
+      if(saved>=level)return new Response(JSON.stringify({...responseState(row,level),error:'Build er allerede låst for denne levelen'}),{headers:jsonHeaders});
+      const rows=await api(`${playersApi}?id=eq.${encodeURIComponent(playerId)}`,{
+        method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({stats_build_open_level:level})
+      });
+      return new Response(JSON.stringify(responseState(rows[0],level)),{headers:jsonHeaders});
     }
 
     if (body.action === 'set') {
+      const open=Number(row.stats_build_open_level)||0,saved=Number(row.stats_build_saved_level)||0;
+      if(level<2||open!==level||saved===level){
+        return new Response(JSON.stringify({...responseState(row,level),error:'Build kan kun justeres etter level up'}),{status:409,headers:jsonHeaders});
+      }
       let alloc;
       try { alloc = normalizeAlloc(body.stats_alloc); }
       catch { return new Response(JSON.stringify({error:'Ugyldig stat-fordeling'}),{status:400,headers:jsonHeaders}); }
-      const r = await fetch(`${playersApi}?id=eq.${encodeURIComponent(playerId)}`,{
-        method:'PATCH',
-        headers:{...serviceHeaders,Prefer:'return=representation'},
-        body:JSON.stringify({stats_alloc:alloc})
+      const spent=Object.values(alloc).reduce((a,b)=>a+b,0),cap=totalAp(level);
+      if(spent>cap)return new Response(JSON.stringify({error:`Du har kun ${cap} AP på Level ${level}`}),{status:400,headers:jsonHeaders});
+      const rows = await api(`${playersApi}?id=eq.${encodeURIComponent(playerId)}`,{
+        method:'PATCH',headers:{Prefer:'return=representation'},
+        body:JSON.stringify({stats_alloc:alloc,stats_build_saved_level:level,stats_build_open_level:null})
       });
-      if (!r.ok) return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
-      const rows = await r.json();
-      if (!rows.length) return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});
-      return new Response(JSON.stringify({ok:true,stats_alloc:normalizeAlloc(rows[0].stats_alloc)}),{headers:jsonHeaders});
+      return new Response(JSON.stringify(responseState(rows[0],level)),{headers:jsonHeaders});
     }
 
     return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
