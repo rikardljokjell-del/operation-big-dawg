@@ -20,6 +20,7 @@ const serviceHeaders = {
 
 const emptyAlloc = () => ({power:0,engine:0,discipline:0,grit:0});
 const WEEK_XP=[0,4,7,10,12,13,14,15];
+const RESPEC_LIMIT=10;
 
 function normalizeAlloc(value: unknown) {
   const src = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -30,6 +31,10 @@ function normalizeAlloc(value: unknown) {
     alloc[key] = n;
   }
   return alloc;
+}
+function spentAp(alloc:ReturnType<typeof emptyAlloc>){return Object.values(alloc).reduce((a,b)=>a+b,0)}
+function releasedAp(before:ReturnType<typeof emptyAlloc>,after:ReturnType<typeof emptyAlloc>){
+  return (Object.keys(before) as (keyof typeof before)[]).reduce((sum,key)=>sum+Math.max(0,before[key]-after[key]),0);
 }
 function totalAp(level:number){return level<2?0:3+Math.max(0,level-2)*2}
 function osloYmd(input:Date|string){
@@ -64,12 +69,19 @@ async function getPlayer(playerId:string){
 }
 function responseState(row:any,level:number){
   const open=Number(row?.stats_build_open_level)||null,saved=Number(row?.stats_build_saved_level)||null;
+  const alloc=normalizeAlloc(row?.stats_alloc),spent=spentAp(alloc),cap=totalAp(level);
+  const buildOpen=level>=2&&open===level&&saved!==level;
   return {
     ok:true,
-    stats_alloc:normalizeAlloc(row?.stats_alloc),
+    stats_alloc:alloc,
     current_level:level,
-    total_ap:totalAp(level),
-    build_open:level>=2&&open===level&&saved!==level,
+    total_ap:cap,
+    spent_ap:spent,
+    unspent_ap:Math.max(0,cap-spent),
+    can_allocate:level>=2&&spent<cap,
+    build_open:buildOpen,
+    respec_open:buildOpen,
+    respec_limit:RESPEC_LIMIT,
     build_open_level:open,
     build_saved_level:saved,
     next_build_level:Math.max(level+1,(saved||1)+1)
@@ -78,7 +90,7 @@ function responseState(row:any,level:number){
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null,{status:204,headers:cors});
-  if (req.method === 'GET') return new Response(JSON.stringify({ok:true,service:'player-stats-level-lock-v2'}),{headers:jsonHeaders});
+  if (req.method === 'GET') return new Response(JSON.stringify({ok:true,service:'player-stats-banked-ap-respec-v3'}),{headers:jsonHeaders});
   if (req.method !== 'POST') return new Response(JSON.stringify({error:'Method not allowed'}),{status:405,headers:jsonHeaders});
 
   try {
@@ -94,7 +106,7 @@ Deno.serve(async (req: Request) => {
     if (body.action === 'unlock') {
       if(level<2)return new Response(JSON.stringify({...responseState(row,level),error:'Stats låses opp på Level 2'}),{headers:jsonHeaders});
       const saved=Number(row.stats_build_saved_level)||0;
-      if(saved>=level)return new Response(JSON.stringify({...responseState(row,level),error:'Build er allerede låst for denne levelen'}),{headers:jsonHeaders});
+      if(saved>=level)return new Response(JSON.stringify({...responseState(row,level),error:'Respec er allerede brukt på denne levelen'}),{headers:jsonHeaders});
       const rows=await api(`${playersApi}?id=eq.${encodeURIComponent(playerId)}`,{
         method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({stats_build_open_level:level})
       });
@@ -102,20 +114,34 @@ Deno.serve(async (req: Request) => {
     }
 
     if (body.action === 'set') {
-      const open=Number(row.stats_build_open_level)||0,saved=Number(row.stats_build_saved_level)||0;
-      if(level<2||open!==level||saved===level){
-        return new Response(JSON.stringify({...responseState(row,level),error:'Build kan kun justeres etter level up'}),{status:409,headers:jsonHeaders});
-      }
+      if(level<2)return new Response(JSON.stringify({...responseState(row,level),error:'Stats er ikke låst opp ennå'}),{status:409,headers:jsonHeaders});
       let alloc;
       try { alloc = normalizeAlloc(body.stats_alloc); }
       catch { return new Response(JSON.stringify({error:'Ugyldig stat-fordeling'}),{status:400,headers:jsonHeaders}); }
-      const spent=Object.values(alloc).reduce((a,b)=>a+b,0),cap=totalAp(level);
+
+      const current=normalizeAlloc(row.stats_alloc),cap=totalAp(level),spent=spentAp(alloc);
       if(spent>cap)return new Response(JSON.stringify({error:`Du har kun ${cap} AP på Level ${level}`}),{status:400,headers:jsonHeaders});
+
+      const open=Number(row.stats_build_open_level)||0,saved=Number(row.stats_build_saved_level)||0;
+      const buildOpen=open===level&&saved!==level;
+      const released=releasedAp(current,alloc);
+
+      if(released>0&&!buildOpen){
+        return new Response(JSON.stringify({...responseState(row,level),error:'Tildelte AP er låst. AP kan bare frigjøres ved level up.'}),{status:409,headers:jsonHeaders});
+      }
+      if(released>RESPEC_LIMIT){
+        return new Response(JSON.stringify({...responseState(row,level),error:`Du kan maksimalt frigjøre ${RESPEC_LIMIT} AP per level up.`}),{status:400,headers:jsonHeaders});
+      }
+
+      const patch:any={stats_alloc:alloc};
+      if(buildOpen){
+        patch.stats_build_saved_level=level;
+        patch.stats_build_open_level=null;
+      }
       const rows = await api(`${playersApi}?id=eq.${encodeURIComponent(playerId)}`,{
-        method:'PATCH',headers:{Prefer:'return=representation'},
-        body:JSON.stringify({stats_alloc:alloc,stats_build_saved_level:level,stats_build_open_level:null})
+        method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(patch)
       });
-      return new Response(JSON.stringify(responseState(rows[0],level)),{headers:jsonHeaders});
+      return new Response(JSON.stringify({...responseState(rows[0],level),respec_released:released,respec_consumed:buildOpen}),{headers:jsonHeaders});
     }
 
     return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
