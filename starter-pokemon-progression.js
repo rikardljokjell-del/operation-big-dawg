@@ -12,9 +12,9 @@
 
   let unlocked=false;
   let unlockBusy=false;
-  let currentPlayerId='';
   let rawAchievement=null;
   let allowMovedGymDexAchievement=false;
+  let releaseReplay=false;
 
   function ensureStyle(){
     if(document.getElementById('starterPokemonProgressionStyle'))return;
@@ -69,7 +69,6 @@
 
   async function syncStarterUnlock(){
     const id=activeId();
-    currentPlayerId=id;
     if(!id){setUnlocked(false);return}
     try{
       const state=await call(STARTER_API,{action:'status',player_id:id});
@@ -83,7 +82,7 @@
   }
 
   async function waitForPermanentDexButton(){
-    for(let i=0;i<40;i++){
+    for(let i=0;i<50;i++){
       const button=document.querySelector('#gymDexLaunch [data-open-permanent-dex]');
       if(button)return button;
       await wait(75);
@@ -91,33 +90,65 @@
     return null;
   }
 
-  async function unlockAfterGrandTheft(){
+  async function waitForDexClosed(){
+    const overlay=document.getElementById('pokemonV2Overlay');
+    if(!overlay)return;
+    for(let i=0;i<30&&!overlay.classList.contains('show');i++)await wait(50);
+    if(!overlay.classList.contains('show'))return;
+    await new Promise(resolve=>{
+      let done=false;
+      const finish=()=>{if(done)return;done=true;observer.disconnect();clearTimeout(timeout);resolve()};
+      const observer=new MutationObserver(()=>{if(!overlay.classList.contains('show'))finish()});
+      observer.observe(overlay,{attributes:true,attributeFilter:['class']});
+      const timeout=setTimeout(finish,120000);
+    });
+  }
+
+  async function showMovedGymDexAchievement(){
+    const previousPriority=!!window.__obdStarterStoryPriority;
+    window.__obdStarterStoryPriority=false;
+    allowMovedGymDexAchievement=true;
+    try{(rawAchievement||window.showAchievement)?.('GYMDEX UNLOCKED')}
+    finally{
+      allowMovedGymDexAchievement=false;
+      window.__obdStarterStoryPriority=previousPriority;
+    }
+    await wait(2350);
+  }
+
+  async function unlockAfterGrandTheft(doneButton){
     if(unlockBusy)return;
     const id=activeId();
     if(!id)return;
     unlockBusy=true;
     try{
-      // The Grand Theft Pokémon DONE handler closes the starter story first.
-      await wait(90);
-      if(id!==activeId())return;
+      // Hide the Grand Theft card, but deliberately keep starter priority active
+      // until the player has seen the new GymDex unlock and opened the collection.
+      document.getElementById('starterEventOverlay')?.classList.remove('show');
+      document.body.classList.remove('starter-modal-open');
+
       setUnlocked(true);
       await persistGymDexUnlock();
-
-      allowMovedGymDexAchievement=true;
-      try{(rawAchievement||window.showAchievement)?.('GYMDEX UNLOCKED')}
-      finally{allowMovedGymDexAchievement=false}
-
-      // Let the achievement land before revealing the collection itself.
-      await wait(2350);
+      await showMovedGymDexAchievement();
       if(id!==activeId())return;
+
       const button=await waitForPermanentDexButton();
       if(button){
         button.scrollIntoView?.({behavior:'smooth',block:'center'});
         await wait(180);
         button.click();
+        await waitForDexClosed();
       }
     }catch(error){console.warn('Starter GymDex unlock flow failed',error)}
-    finally{unlockBusy=false}
+    finally{
+      unlockBusy=false;
+      // Replay the original DONE click only now. This lets starter-event.js run
+      // its normal releasePriority(), so XP/Gym/other rewards continue afterwards.
+      if(doneButton?.isConnected){
+        releaseReplay=true;
+        try{doneButton.click()}finally{releaseReplay=false}
+      }
+    }
   }
 
   function suppressLegacyGymDexIntro(){
@@ -135,18 +166,21 @@
   installAchievementGuard();
   setUnlocked(false);
 
-  // Grand Theft Pokémon is already displayed at this point. Unlock the next
-  // progression layer only when the player presses DONE on that achievement.
+  // Grand Theft Pokémon is already on screen. Intercept its DONE click so the
+  // next progression beat is always: GYMDEX UNLOCKED -> open GymDex -> continue.
   document.addEventListener('click',event=>{
-    if(!event.target.closest?.('#starterDone'))return;
-    setTimeout(unlockAfterGrandTheft,0);
+    const done=event.target.closest?.('#starterDone');
+    if(!done||releaseReplay)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    unlockAfterGrandTheft(done);
   },true);
 
   const legacyObserver=new MutationObserver(suppressLegacyGymDexIntro);
   legacyObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
 
   window.addEventListener('obd-auth-ready',()=>setTimeout(syncStarterUnlock,140));
-  window.addEventListener('obd-player-changed',()=>{unlockBusy=false;currentPlayerId='';setUnlocked(false);setTimeout(syncStarterUnlock,100)});
+  window.addEventListener('obd-player-changed',()=>{unlockBusy=false;setUnlocked(false);setTimeout(syncStarterUnlock,100)});
   window.addEventListener('pageshow',()=>setTimeout(syncStarterUnlock,180));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(syncStarterUnlock,100)});
 
