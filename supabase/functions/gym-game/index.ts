@@ -34,7 +34,7 @@ async function insertWild(id,body){const a=await api('/wild_pokemon_state',{meth
 
 function osloDay(ts){try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Oslo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ts))}catch{return String(ts).slice(0,10)}}
 function autoStats(level){const out={power:0,engine:0,discipline:0,grit:0};for(let l=2;l<=level;l++)out[AUTO_ORDER[(l-2)%AUTO_ORDER.length]]++;return out}
-function tierIndex(value){return value>=10?3:value>=7?2:value>=4?1:0}
+function tierIndex(value){return value>=23?3:value>=15?2:value>=8?1:0}
 async function benefitsFor(id,level){
   const p=await player(id),rows=await workoutRows(id),alloc=p?.stats_alloc||{},auto=autoStats(level);
   const strength=rows.filter(r=>r.workout_type==='strength').length;
@@ -170,7 +170,7 @@ async function resolveVictory(id,level,snipeTarget){
   const target=loot.includes(requested)?requested:null;
   const chance=Number(benefits.tiers.discipline.snipe_chance)||0;
   const snipeSuccess=target!=null&&Math.random()<chance;
-  const pool=loot.filter(id=>!(snipeSuccess&&id===target));
+  let pool=loot.filter(id=>!(snipeSuccess&&id===target));
   const shuffleCount=Math.min(pool.length,1+(Number(benefits.tiers.engine.extra_shuffle)||0));
   const shuffle=sample(pool,shuffleCount);
   const awards=[...new Set([...(snipeSuccess?[target]:[]),...shuffle])];
@@ -247,7 +247,7 @@ async function wildAttempt(id,level,workoutId){
 
 Deno.serve(async(req)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
-  if(req.method==='GET')return out({ok:true,mode:'gym-wild-victory-v5'});
+  if(req.method==='GET')return out({ok:true,mode:'gym-wild-victory-v6-slower-stats'});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
   try{
     const b=await req.json();if(String(b.pin||'')!==PIN)return out({error:'Feil PIN'},403);
