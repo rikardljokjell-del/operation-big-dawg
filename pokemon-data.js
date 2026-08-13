@@ -42,14 +42,15 @@
   const loadDebug=()=>loadScript('test-debug.js','data-obd-test-debug-router',loadProgression);
   const loadOnboarding=()=>loadScript('onboarding-access.js','data-obd-onboarding-access',loadDebug);
   const loadCompanionArt=()=>loadScript('starter-companion-art.js','data-obd-starter-companion-art',loadOnboarding);
-  const loadPokemonGameplayFix=()=>loadScript('pokemon-gameplay-v2-fix.js','data-obd-pokemon-gameplay-v2-fix',loadCompanionArt);
+  const loadStatBenefitStability=()=>loadScript('stats-benefit-stability.js','data-obd-stat-benefit-stability',loadCompanionArt);
+  const loadPokemonGameplayFix=()=>loadScript('pokemon-gameplay-v2-fix.js','data-obd-pokemon-gameplay-v2-fix',loadStatBenefitStability);
   const loadPokemonGameplay=()=>{
     // pokemon-gameplay-v2 used to attach a MutationObserver to #fighters and then
     // mutate the same subtree while rendering stat bonuses. On some phones this
     // created a self-triggering microtask loop that could freeze the page after
     // Wild/Gym state syncs. Keep #fighters temporarily out of that observer's
-    // lookup while the runtime initializes; all stat bonuses still render from
-    // the normal sync/update hooks.
+    // lookup while the runtime initializes; a separate guarded observer now keeps
+    // stat gameplay benefits present after normal fighter rerenders.
     const fighters=document.getElementById('fighters');
     const originalId=fighters?.id||'';
     if(fighters)fighters.id='fighters-observer-paused';
@@ -59,7 +60,8 @@
     });
   };
   const loadGymFlow=()=>loadScript('gym-flow-polish.js','data-obd-gym-flow-polish',loadPokemonGameplay);
-  const loadWildUnlockGuard=()=>loadScript('wild-unlock-guard.js','data-obd-wild-unlock-guard',loadGymFlow);
+  const loadWildAttemptRoute=()=>loadScript('wild-attempt-route.js','data-obd-wild-attempt-route',loadGymFlow);
+  const loadWildUnlockGuard=()=>loadScript('wild-unlock-guard.js','data-obd-wild-unlock-guard',loadWildAttemptRoute);
   const loadStarterProgression=()=>loadScript('starter-pokemon-progression.js','data-obd-starter-pokemon-progression',loadWildUnlockGuard);
   loadScript('starter-event.js','data-obd-starter-event',loadStarterProgression);
 })();
