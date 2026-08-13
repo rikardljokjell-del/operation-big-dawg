@@ -59,6 +59,7 @@
     });
   };
   const loadGymFlow=()=>loadScript('gym-flow-polish.js','data-obd-gym-flow-polish',loadPokemonGameplay);
-  const loadStarterProgression=()=>loadScript('starter-pokemon-progression.js','data-obd-starter-pokemon-progression',loadGymFlow);
+  const loadWildUnlockGuard=()=>loadScript('wild-unlock-guard.js','data-obd-wild-unlock-guard',loadGymFlow);
+  const loadStarterProgression=()=>loadScript('starter-pokemon-progression.js','data-obd-starter-pokemon-progression',loadWildUnlockGuard);
   loadScript('starter-event.js','data-obd-starter-event',loadStarterProgression);
 })();
