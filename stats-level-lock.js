@@ -83,7 +83,10 @@
         if(url.includes('/functions/v1/player-stats')&&init?.body){
           const body=typeof init.body==='string'?JSON.parse(init.body):null;
           if(body?.player_id&&['get','set','unlock'].includes(body?.action)){
-            response.clone().json().then(data=>ingest(String(body.player_id),data)).catch(()=>{});
+            response.clone().json().then(data=>{
+              ingest(String(body.player_id),data);
+              if(body.action==='set'&&response.ok)window.dispatchEvent(new CustomEvent('obd-stats-build-saved',{detail:{playerId:String(body.player_id)}}));
+            }).catch(()=>{});
           }
         }
       }catch{}
