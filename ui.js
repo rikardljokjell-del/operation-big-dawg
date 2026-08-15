@@ -65,6 +65,7 @@ function renderEvolution(){
 }
 
 function renderHeat(){
+  if(typeof window.renderTrainingCalendar==='function')return window.renderTrainingCalendar();
   const p=activePlayer(),today=ymd(new Date()),start=addDaysYmd(currentWeek(),-49);
   PEOPLE.forEach(name=>{
     const h=$('heat'+name),card=h?.closest('.calendar-card'),active=name===p;
@@ -95,10 +96,10 @@ function renderForm(){
 }
 
 function renderHistory(){
-  const p=activePlayer(),filtered=rowsForPlayer(p),list=filtered.slice(0,visibleHistory),h=$('history');
+  const p=activePlayer(),filtered=typeof historyRowsForPlayer==='function'?historyRowsForPlayer(p):rowsForPlayer(p),list=filtered.slice(0,visibleHistory),h=$('history');
   h.innerHTML=!list.length?`<div class="muted" style="text-align:center;padding:18px">Ingen økter logget for ${p} ennå.</div>`:list.map(r=>{
-    const d=new Date(r.created_at),date=d.toLocaleDateString('nb-NO',{day:'2-digit',month:'short',year:'2-digit',timeZone:'Europe/Oslo'}),time=d.toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Oslo'}),label=r.workout_type==='strength'?'Styrke':'Kondis';
-    return `<div class="row" data-id="${r.id}"><div class="left"><span class="dot ${r.workout_type}"></span><div><div class="who">${r.person}</div><div class="kind">${label}</div></div></div><div class="when">${date}<br>${time}</div></div>`;
+    const d=new Date(r.created_at),date=d.toLocaleDateString('nb-NO',{day:'2-digit',month:'short',year:'2-digit',timeZone:'Europe/Oslo'}),time=d.toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Oslo'}),label=r.workout_type==='strength'?'Styrke':'Kondis',manual=r.entry_source==='manual';
+    return `<div class="row" data-id="${r.id}" data-source="${manual?'manual':'normal'}"><div class="left"><span class="dot ${r.workout_type}"></span><div><div class="who">${r.person}</div><div class="kind">${label}${manual?'<span class="history-source-badge">ETTERREGISTRERT</span>':''}</div></div></div><div class="when">${date}<br>${time}</div></div>`;
   }).join('');
   document.querySelectorAll('.row[data-id]').forEach(el=>el.onclick=()=>openEdit(el.dataset.id));
   $('moreBtn').hidden=filtered.length<=10;
@@ -154,11 +155,11 @@ async function addWorkout(person,type){
 
 async function undoWorkout(person){if(busy)return;if(!confirm(`Angre siste registrerte økt for ${person}?`))return;const meta=typeof window.getPlayerMeta==='function'?window.getPlayerMeta(person):null;setBusy(true);try{const r=await call({action:'undo',person,player_id:meta?.id||undefined});await refresh(true);toast(r.deleted?'Siste økt fjernet':'Ingen økt å angre')}catch(e){toast(e.message)}finally{setBusy(false)}}
 function toLocalInput(date){const d=new Date(date),pad=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
-function openEdit(id){editing=rows.find(r=>r.id===id);if(!editing)return;$('editMeta').textContent=`${editing.person} · ${editing.workout_type==='strength'?'Styrke':'Kondis'}`;$('editDate').value=toLocalInput(editing.created_at);$('editDialog').showModal()}
+function openEdit(id){editing=rows.find(r=>r.id===id);if(!editing)return;$('editMeta').textContent=`${editing.person} · ${editing.workout_type==='strength'?'Styrke':'Kondis'}${editing.entry_source==='manual'?' · Etterregistrert':''}`;$('editDate').value=toLocalInput(editing.created_at);$('editDialog').showModal()}
 $('cancelEdit').onclick=()=>$('editDialog').close();
-$('saveEdit').onclick=async()=>{if(!editing||busy)return;const val=$('editDate').value;if(!val)return toast('Velg dato og tid');if(!confirm('Lagre ny dato/tid for økten?'))return;setBusy(true);try{await call({action:'edit',id:editing.id,created_at:new Date(val).toISOString()});$('editDialog').close();await refresh(true);toast('Økten er oppdatert')}catch(e){toast(e.message)}finally{setBusy(false)}};
-$('deleteEdit').onclick=async()=>{if(!editing||busy)return;if(!confirm('Slette denne økten permanent?'))return;setBusy(true);try{await call({action:'delete',id:editing.id});$('editDialog').close();await refresh(true);toast('Økten er slettet')}catch(e){toast(e.message)}finally{setBusy(false)}};
-$('moreBtn').onclick=()=>{const count=rowsForPlayer(activePlayer()).length;visibleHistory=visibleHistory>=count?10:Math.min(count,visibleHistory+10);renderHistory()};
+$('saveEdit').onclick=async()=>{if(!editing||busy)return;const val=$('editDate').value;if(!val)return toast('Velg dato og tid');if(!confirm('Lagre ny dato/tid for økten?'))return;setBusy(true);try{await call({action:'edit',id:editing.id,source:editing.entry_source==='manual'?'manual':'normal',created_at:new Date(val).toISOString()});$('editDialog').close();await refresh(true);toast('Økten er oppdatert')}catch(e){toast(e.message)}finally{setBusy(false)}};
+$('deleteEdit').onclick=async()=>{if(!editing||busy)return;if(!confirm('Slette denne økten permanent?'))return;setBusy(true);try{await call({action:'delete',id:editing.id,source:editing.entry_source==='manual'?'manual':'normal'});$('editDialog').close();await refresh(true);toast('Økten er slettet')}catch(e){toast(e.message)}finally{setBusy(false)}};
+$('moreBtn').onclick=()=>{const list=typeof historyRowsForPlayer==='function'?historyRowsForPlayer(activePlayer()):rowsForPlayer(activePlayer()),count=list.length;visibleHistory=visibleHistory>=count?10:Math.min(count,visibleHistory+10);renderHistory()};
 $('evoOverlay').onclick=closeEvolution;$('achOverlay').onclick=()=>$('achOverlay').classList.remove('show');
 $('resetAll').onclick=async()=>{if(busy)return;const pin=prompt('Tast PIN for å nullstille all datalogg');if(pin===null)return;if(pin!=='1337'){toast('Feil PIN');return}if(!confirm('Dette sletter ALL treningshistorikk. Er du sikker?'))return;setBusy(true);try{await call({action:'reset',confirm:'RESET_ALL_WORKOUTS',pin});rows=[];lastBadgeSet=new Set();visibleHistory=10;render();toast('All historikk er nullstilt')}catch(e){toast(e.message)}finally{setBusy(false)}};
 

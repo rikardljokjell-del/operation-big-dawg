@@ -1,4 +1,4 @@
-const API='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/training-tracker';
+const API='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/training-tracker-calendar-preview';
 const PEOPLE=['Rikard','Adrian'],RANKS=['Couch Recruit','Rep Collector','Hemorrhoid Pumper','Protein Junkie','Pump Chaser','Iron Disciple','Disciplined Lifter','Big Dawg','Meat Machine','Gym Warlord'];
 const rankForLevel=level=>RANKS[Math.min(RANKS.length,Math.max(1,Number(level)||1))-1]||RANKS[RANKS.length-1];
 const FORMS=[
@@ -25,8 +25,10 @@ const playerMeta=p=>typeof window.getPlayerMeta==='function'?window.getPlayerMet
 const playerIdFor=p=>playerMeta(p)?.id||'';
 const rowPlayerKey=r=>r.player_id||String(r.person||'').trim().toLocaleLowerCase('nb-NO');
 const rowMatchesPlayer=(r,p)=>{const id=playerIdFor(p);if(id&&r.player_id)return r.player_id===id;const name=playerMeta(p)?.name||String(p||'');return String(r.person||'').localeCompare(name,'nb-NO',{sensitivity:'base'})===0};
-const rowsForPlayer=(p,src=rows)=>src.filter(r=>rowMatchesPlayer(r,p));
-const creditedRows=(src=rows)=>{const seen=new Set();return src.filter(r=>{const k=rowPlayerKey(r)+'|'+ymd(r.created_at);if(seen.has(k))return false;seen.add(k);return true})};
+const isManualWorkout=r=>r?.entry_source==='manual';
+const historyRowsForPlayer=(p,src=rows)=>src.filter(r=>rowMatchesPlayer(r,p));
+const rowsForPlayer=(p,src=rows)=>historyRowsForPlayer(p,src).filter(r=>!isManualWorkout(r));
+const creditedRows=(src=rows)=>{const seen=new Set();return src.filter(r=>!isManualWorkout(r)).filter(r=>{const k=rowPlayerKey(r)+'|'+ymd(r.created_at);if(seen.has(k))return false;seen.add(k);return true})};
 const creditedRowsFor=(p,src=rows)=>creditedRows(rowsForPlayer(p,src));
 const totalCredited=(src=rows)=>creditedRows(src).length;
 const uniqueDays=(p,w,src=rows)=>new Set(rowsForPlayer(p,src).filter(r=>mondayKey(r.created_at)===w).map(r=>ymd(r.created_at))).size;
