@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="battle.css">
   <link rel="stylesheet" href="auth.css">
   <link rel="stylesheet" href="compact.css">
+  <link rel="stylesheet" href="calendar-history.css">
   <link rel="stylesheet" href="reward.css">
 </head>
 <body>
@@ -159,8 +160,20 @@
 
     <section id="calendar" class="section-block calendar-section">
       <div class="section-heading">
-        <div><span class="section-kicker">STREAK CALENDAR</span><h2>Mini-kalender</h2></div>
+        <div><span class="section-kicker">TRAINING HISTORY</span><h2>Mini-kalender</h2></div>
         <span class="section-note">S = styrke · K = kondis</span>
+      </div>
+      <div class="calendar-toolbar" aria-label="Kalendernavigasjon">
+        <button id="calendarPrev" class="calendar-nav-button" type="button" aria-label="Forrige periode">‹</button>
+        <button id="calendarViewCycle" class="calendar-view-button" type="button" aria-label="Bytt kalendervisning">
+          <span class="calendar-cycle-icon" aria-hidden="true">↻</span>
+          <span id="calendarViewLabel">Siste 8 uker</span>
+        </button>
+        <button id="calendarNext" class="calendar-nav-button" type="button" aria-label="Neste periode" disabled>›</button>
+      </div>
+      <div class="calendar-range-row">
+        <span id="calendarRangeLabel" class="calendar-range-label"></span>
+        <button id="calendarToday" class="calendar-today-button" type="button" hidden>I dag</button>
       </div>
       <div class="heat-wrap">
         <article class="calendar-card calendar-rikard">
@@ -174,6 +187,7 @@
           <div id="heatAdrian" class="heat"></div>
         </article>
       </div>
+      <button id="openManualWorkout" class="manual-workout-button" type="button">＋ Etterregistrer økt</button>
     </section>
 
     <section id="historySection" class="section-block">
@@ -222,6 +236,47 @@
     </div>
   </dialog>
 
+  <dialog id="manualWorkoutDialog" class="manual-workout-dialog">
+    <div class="manual-dialog-head">
+      <div><span class="section-kicker">HISTORY ONLY</span><h3>Etterregistrer økt</h3></div>
+      <button id="closeManualWorkout" class="dialog-close-button" type="button" aria-label="Lukk">×</button>
+    </div>
+    <div id="manualPlayerLabel" class="manual-player-label"></div>
+    <div class="manual-info-box">
+      Etterregistrering gjelder kun tidligere dager. Økten vises i kalenderen og loggen, men gir ingen XP, AP, streak, level, Weekly Battle-poeng, bossfordeler eller andre spillfordeler.
+    </div>
+
+    <div class="manual-date-picker">
+      <div class="manual-date-nav">
+        <button id="manualMonthPrev" class="manual-month-arrow" type="button" aria-label="Forrige måned">‹</button>
+        <div class="manual-month-selects">
+          <label><span>Måned</span><select id="manualMonth"></select></label>
+          <label><span>År</span><select id="manualYear"></select></label>
+        </div>
+        <button id="manualMonthNext" class="manual-month-arrow" type="button" aria-label="Neste måned">›</button>
+      </div>
+      <div class="manual-weekdays" aria-hidden="true"><span>M</span><span>T</span><span>O</span><span>T</span><span>F</span><span>L</span><span>S</span></div>
+      <div id="manualDateGrid" class="manual-date-grid" role="grid" aria-label="Velg dato"></div>
+    </div>
+
+    <div id="manualSelectedDate" class="manual-selected-date"></div>
+    <div id="manualDateStatus" class="manual-date-status" aria-live="polite"></div>
+
+    <fieldset class="manual-type-field">
+      <legend>Velg økttype</legend>
+      <div class="manual-type-grid">
+        <label class="manual-type-option manual-strength"><input type="radio" name="manualWorkoutType" value="strength"><span>Styrke</span></label>
+        <label class="manual-type-option manual-cardio"><input type="radio" name="manualWorkoutType" value="cardio"><span>Kondisjon</span></label>
+      </div>
+    </fieldset>
+
+    <div class="field manual-time-field"><label for="manualWorkoutTime">Tidspunkt</label><input id="manualWorkoutTime" type="time" step="60"></div>
+    <div class="modal-actions manual-actions">
+      <button id="cancelManualWorkout" class="btn undo" type="button">Avbryt</button>
+      <button id="saveManualWorkout" class="btn strength" type="button">Lagre økt</button>
+    </div>
+  </dialog>
+
   <div id="evoOverlay" class="overlay">
     <div class="overlay-card">
       <span class="section-kicker">EVOLUTION</span>
@@ -254,6 +309,7 @@
   <script src="characters.js"></script>
   <script src="auth.js"></script>
   <script src="ui.js"></script>
+  <script src="calendar-history.js"></script>
   <script src="stats.js"></script>
   <script src="daily-limit.js"></script>
   <script src="reward.js"></script>

@@ -4,6 +4,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const APP_PIN = Deno.env.get('APP_PIN') || '1337';
 const workoutsApi = `${SUPABASE_URL}/rest/v1/workouts`;
+const manualWorkoutsApi = `${SUPABASE_URL}/rest/v1/manual_workouts`;
 const playersApi = `${SUPABASE_URL}/rest/v1/players`;
 const claimsApi = `${SUPABASE_URL}/rest/v1/workout_reward_claims`;
 
@@ -29,7 +30,7 @@ function osloYmd(date:Date){
   return `${v.year}-${v.month}-${v.day}`;
 }
 function shiftYmd(value:string,days:number){const [y,m,d]=value.split('-').map(Number),dt=new Date(Date.UTC(y,m-1,d+days));return dt.toISOString().slice(0,10)}
-function editDateBounds(originalIso:string){const original=osloYmd(new Date(originalIso)),min=shiftYmd(original,-7),plusSeven=shiftYmd(original,7),today=osloYmd(new Date()),max=plusSeven<today?plusSeven:today;return{original,min,max,today}}
+function editDateBounds(originalIso:string,allowToday=true){const original=osloYmd(new Date(originalIso)),min=shiftYmd(original,-7),plusSeven=shiftYmd(original,7),today=osloYmd(new Date()),latest=allowToday?today:shiftYmd(today,-1),max=plusSeven<latest?plusSeven:latest;return{original,min,max,today}}
 function weekKey(input:string|Date){const d=input instanceof Date?input:new Date(input),ymd=osloYmd(d),[y,m,day]=ymd.split('-').map(Number),cal=new Date(Date.UTC(y,m-1,day)),dow=cal.getUTCDay()||7;cal.setUTCDate(cal.getUTCDate()-(dow-1));return cal.toISOString().slice(0,10)}
 
 async function fetchPlayersWithPins():Promise<Player[]>{const r=await fetch(`${playersApi}?select=id,name,character_set,pin,created_at&order=created_at.asc`,{headers:serviceHeaders});if(!r.ok)throw new Error(await r.text());return await r.json()}
@@ -39,8 +40,9 @@ async function resolvePlayer(input:{player_id?:unknown;person?:unknown;name?:unk
 }
 async function authenticateAccessPin(value:unknown){const pin=String(value??''),master=pin===APP_PIN,players=await fetchPlayersWithPins(),playerIds=players.filter(p=>p.pin===pin).map(p=>p.id);return{ok:master||playerIds.length>0,master,player_ids:playerIds}}
 async function allRowsFor(playerId:string){const r=await fetch(`${workoutsApi}?player_id=eq.${encodeURIComponent(playerId)}&select=id,player_id,person,workout_type,created_at&order=created_at.asc`,{headers:serviceHeaders});if(!r.ok)throw new Error(await r.text());return await r.json()}
+async function manualRowsFor(playerId:string){const r=await fetch(`${manualWorkoutsApi}?player_id=eq.${encodeURIComponent(playerId)}&select=id,player_id,workout_type,workout_date,occurred_at,created_at&order=occurred_at.asc`,{headers:serviceHeaders});if(!r.ok)throw new Error(await r.text());const list=await r.json();return list.map((row:any)=>({...row,created_at:row.occurred_at,entry_source:'manual'}))}
 async function ensureWeekCapacity(playerId:string,dateIso:string,excludeId?:string){const rows=await allRowsFor(playerId),targetWeek=weekKey(dateIso),targetDay=osloYmd(new Date(dateIso)),days=new Set<string>();for(const row of rows){if(row.id===excludeId)continue;if(weekKey(row.created_at)!==targetWeek)continue;days.add(osloYmd(new Date(row.created_at)))}if(days.has(targetDay))return;if(days.size>=7)throw new Error('WEEK_LIMIT')}
-async function ensureDailyTypeAvailable(playerId:string,dateIso:string,workoutType:string,excludeId?:string){const rows=await allRowsFor(playerId),targetDay=osloYmd(new Date(dateIso)),duplicate=rows.some(row=>row.id!==excludeId&&row.workout_type===workoutType&&osloYmd(new Date(row.created_at))===targetDay);if(duplicate)throw new Error('DAILY_TYPE_LIMIT')}
+async function ensureDailyTypeAvailable(playerId:string,dateIso:string,workoutType:string,excludeId?:string){const [regular,manual]=await Promise.all([allRowsFor(playerId),manualRowsFor(playerId)]),targetDay=osloYmd(new Date(dateIso)),duplicate=[...regular,...manual].some(row=>row.id!==excludeId&&row.workout_type===workoutType&&osloYmd(new Date(row.created_at))===targetDay);if(duplicate)throw new Error('DAILY_TYPE_LIMIT')}
 async function claimReward(playerId:string,dateIso:string,workoutType:string,workoutId:string){
   const rewardDate=osloYmd(new Date(dateIso));
   const r=await fetch(`${claimsApi}?on_conflict=player_id,reward_date,workout_type`,{
@@ -72,7 +74,17 @@ Deno.serve(async(req:Request)=>{
     if(body.action==='verify_player_pin'){const player=await resolvePlayer(body);if(!player)return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});const ok=String(body.player_pin??'')===player.pin;return new Response(JSON.stringify({ok}),{status:ok?200:403,headers:jsonHeaders})}
     if(body.action==='change_player_pin'){const player=await resolvePlayer(body);if(!player)return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});if(String(body.current_pin??'')!==player.pin)return new Response(JSON.stringify({error:'Feil spiller-PIN'}),{status:403,headers:jsonHeaders});if(!validPlayerPin(body.new_pin))return new Response(JSON.stringify({error:'Ny PIN må være 4 tall'}),{status:400,headers:jsonHeaders});const r=await fetch(`${playersApi}?id=eq.${encodeURIComponent(player.id)}`,{method:'PATCH',headers:{...serviceHeaders,'Prefer':'return=minimal'},body:JSON.stringify({pin:String(body.new_pin)})});return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders})}
     if(body.action==='delete_player'){const player=await resolvePlayer(body);if(!player)return new Response(JSON.stringify({error:'Spiller finnes ikke'}),{status:404,headers:jsonHeaders});if(String(body.player_pin??'')!==player.pin)return new Response(JSON.stringify({error:'Feil spiller-PIN'}),{status:403,headers:jsonHeaders});if(body.confirm!=='DELETE_PLAYER')return new Response(JSON.stringify({error:'Confirmation required'}),{status:400,headers:jsonHeaders});const r=await fetch(`${playersApi}?id=eq.${encodeURIComponent(player.id)}`,{method:'DELETE',headers:serviceHeaders});return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders})}
-    if(body.action==='list'){const r=await fetch(`${workoutsApi}?select=id,player_id,person,workout_type,created_at&order=created_at.desc`,{headers:serviceHeaders});return new Response(await r.text(),{status:r.status,headers:jsonHeaders})}
+    if(body.action==='list'){
+      const [regularResponse,manualResponse,players]=await Promise.all([
+        fetch(`${workoutsApi}?select=id,player_id,person,workout_type,created_at&order=created_at.desc`,{headers:serviceHeaders}),
+        fetch(`${manualWorkoutsApi}?select=id,player_id,workout_type,workout_date,occurred_at,created_at&order=occurred_at.desc`,{headers:serviceHeaders}),
+        fetchPlayersWithPins()
+      ]);
+      if(!regularResponse.ok)return new Response(await regularResponse.text(),{status:regularResponse.status,headers:jsonHeaders});
+      if(!manualResponse.ok)return new Response(await manualResponse.text(),{status:manualResponse.status,headers:jsonHeaders});
+      const playerNames=new Map(players.map(player=>[player.id,player.name])),regular=(await regularResponse.json()).map((row:any)=>({...row,entry_source:'normal'})),manual=(await manualResponse.json()).map((row:any)=>({id:row.id,player_id:row.player_id,person:playerNames.get(row.player_id)||'',workout_type:row.workout_type,created_at:row.occurred_at,logged_at:row.created_at,workout_date:row.workout_date,entry_source:'manual'}));
+      return new Response(JSON.stringify([...regular,...manual].sort((a:any,b:any)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())),{headers:jsonHeaders});
+    }
 
     if(body.action==='add'){
       const player=await resolvePlayer(body);if(!player||!['strength','cardio'].includes(body.workout_type))return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
@@ -85,6 +97,19 @@ Deno.serve(async(req:Request)=>{
       return new Response(JSON.stringify({workout,...reward}),{headers:jsonHeaders});
     }
 
+    if(body.action==='manual_add'){
+      const player=await resolvePlayer(body),workoutType=String(body.workout_type||''),requestedDate=String(body.workout_date||''),dt=new Date(body.created_at);
+      if(!player||!['strength','cardio'].includes(workoutType)||!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)||Number.isNaN(dt.getTime()))return new Response(JSON.stringify({error:'Ugyldig øktdata'}),{status:400,headers:jsonHeaders});
+      const targetDay=osloYmd(dt),today=osloYmd(new Date());
+      if(targetDay!==requestedDate)return new Response(JSON.stringify({error:'Dato og tidspunkt samsvarer ikke'}),{status:400,headers:jsonHeaders});
+      if(targetDay>=today)return new Response(JSON.stringify({error:'Etterregistrering er kun mulig til og med gårsdagen'}),{status:400,headers:jsonHeaders});
+      try{await ensureDailyTypeAvailable(player.id,dt.toISOString(),workoutType)}catch(e){if(String(e).includes('DAILY_TYPE_LIMIT')){const label=workoutType==='strength'?'Styrke':'Kondis';return new Response(JSON.stringify({error:`${label} er allerede registrert denne dagen`}),{status:409,headers:jsonHeaders})}throw e}
+      const r=await fetch(manualWorkoutsApi,{method:'POST',headers:{...serviceHeaders,'Prefer':'return=representation'},body:JSON.stringify({player_id:player.id,workout_type:workoutType,workout_date:targetDay,occurred_at:dt.toISOString()})}),text=await r.text();
+      if(!r.ok){if(r.status===409||text.includes('DAILY_TYPE_LIMIT')||text.includes('manual_workouts_player_day_type_unique')){const label=workoutType==='strength'?'Styrke':'Kondis';return new Response(JSON.stringify({error:`${label} er allerede registrert denne dagen`}),{status:409,headers:jsonHeaders})}return new Response(text,{status:r.status,headers:jsonHeaders})}
+      const inserted=text?JSON.parse(text):[],row=inserted?.[0]||null,workout=row?{id:row.id,player_id:row.player_id,person:player.name,workout_type:row.workout_type,created_at:row.occurred_at,workout_date:row.workout_date,entry_source:'manual'}:null;
+      return new Response(JSON.stringify({workout,history_only:true,reward_eligible:false}),{headers:jsonHeaders});
+    }
+
     if(body.action==='undo'){
       const player=await resolvePlayer(body);if(!player)return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
       const q=await fetch(`${workoutsApi}?player_id=eq.${encodeURIComponent(player.id)}&select=id,created_at&order=created_at.desc&limit=1`,{headers:serviceHeaders});if(!q.ok)throw new Error(await q.text());const arr=await q.json();
@@ -94,13 +119,13 @@ Deno.serve(async(req:Request)=>{
 
     if(body.action==='edit'){
       if(!body.id||!body.created_at)return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
-      const q=await fetch(`${workoutsApi}?id=eq.${encodeURIComponent(body.id)}&select=id,player_id,person,workout_type,created_at&limit=1`,{headers:serviceHeaders}),arr=await q.json();if(!arr.length)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:jsonHeaders});const row=arr[0],dt=new Date(body.created_at);if(Number.isNaN(dt.getTime()))return new Response(JSON.stringify({error:'Ugyldig dato'}),{status:400,headers:jsonHeaders});
-      const originalDay=osloYmd(new Date(row.created_at)),targetDay=osloYmd(dt),bounds=editDateBounds(row.created_at);if(targetDay<bounds.min||targetDay>bounds.max){const message=targetDay>bounds.today?'Dato kan ikke settes frem i tid':`Dato kan bare endres maks 7 dager fra originaldato (${bounds.original}). Tillatt: ${bounds.min} – ${bounds.max}`;return new Response(JSON.stringify({error:message}),{status:400,headers:jsonHeaders})}
-      try{if(targetDay!==originalDay)await ensureDailyTypeAvailable(row.player_id,dt.toISOString(),row.workout_type,row.id);await ensureWeekCapacity(row.player_id,dt.toISOString(),row.id)}catch(e){if(String(e).includes('DAILY_TYPE_LIMIT')){const label=row.workout_type==='strength'?'styrkeøkt':'kondisøkt';return new Response(JSON.stringify({error:`Det finnes allerede en ${label} den dagen`}),{status:409,headers:jsonHeaders})}if(String(e).includes('WEEK_LIMIT'))return new Response(JSON.stringify({error:'Den uken har allerede 7 tellende treningsdager'}),{status:409,headers:jsonHeaders});throw e}
-      const r=await fetch(`${workoutsApi}?id=eq.${encodeURIComponent(body.id)}`,{method:'PATCH',headers:{...serviceHeaders,'Prefer':'return=representation'},body:JSON.stringify({created_at:dt.toISOString()})});return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
+      const manual=body.source==='manual',queryApi=manual?manualWorkoutsApi:workoutsApi,select=manual?'id,player_id,workout_type,workout_date,occurred_at':'id,player_id,person,workout_type,created_at',q=await fetch(`${queryApi}?id=eq.${encodeURIComponent(body.id)}&select=${select}&limit=1`,{headers:serviceHeaders}),arr=await q.json();if(!arr.length)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:jsonHeaders});const raw=arr[0],row=manual?{...raw,created_at:raw.occurred_at}:raw,dt=new Date(body.created_at);if(Number.isNaN(dt.getTime()))return new Response(JSON.stringify({error:'Ugyldig dato'}),{status:400,headers:jsonHeaders});
+      const originalDay=osloYmd(new Date(row.created_at)),targetDay=osloYmd(dt),bounds=editDateBounds(row.created_at,!manual);if(targetDay<bounds.min||targetDay>bounds.max){const message=targetDay>bounds.today?'Dato kan ikke settes frem i tid':manual&&targetDay>=bounds.today?'Etterregistrerte økter kan ikke flyttes til dagens dato':`Dato kan bare endres maks 7 dager fra originaldato (${bounds.original}). Tillatt: ${bounds.min} – ${bounds.max}`;return new Response(JSON.stringify({error:message}),{status:400,headers:jsonHeaders})}
+      try{if(targetDay!==originalDay)await ensureDailyTypeAvailable(row.player_id,dt.toISOString(),row.workout_type,row.id);if(!manual)await ensureWeekCapacity(row.player_id,dt.toISOString(),row.id)}catch(e){if(String(e).includes('DAILY_TYPE_LIMIT')){const label=row.workout_type==='strength'?'styrkeøkt':'kondisøkt';return new Response(JSON.stringify({error:`Det finnes allerede en ${label} den dagen`}),{status:409,headers:jsonHeaders})}if(String(e).includes('WEEK_LIMIT'))return new Response(JSON.stringify({error:'Den uken har allerede 7 tellende treningsdager'}),{status:409,headers:jsonHeaders});throw e}
+      const patch=manual?{occurred_at:dt.toISOString(),workout_date:targetDay}:{created_at:dt.toISOString()},r=await fetch(`${queryApi}?id=eq.${encodeURIComponent(body.id)}`,{method:'PATCH',headers:{...serviceHeaders,'Prefer':'return=representation'},body:JSON.stringify(patch)});return new Response(await r.text(),{status:r.status,headers:jsonHeaders});
     }
-    if(body.action==='delete'){if(!body.id)return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});const r=await fetch(`${workoutsApi}?id=eq.${encodeURIComponent(body.id)}`,{method:'DELETE',headers:serviceHeaders});return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders})}
-    if(body.action==='reset'){if(body.confirm!=='RESET_ALL_WORKOUTS')return new Response(JSON.stringify({error:'Confirmation required'}),{status:400,headers:jsonHeaders});const r=await fetch(`${workoutsApi}?id=not.is.null`,{method:'DELETE',headers:serviceHeaders});if(r.ok)await fetch(`${claimsApi}?player_id=not.is.null`,{method:'DELETE',headers:serviceHeaders});return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders})}
+    if(body.action==='delete'){if(!body.id)return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});const target=body.source==='manual'?manualWorkoutsApi:workoutsApi,r=await fetch(`${target}?id=eq.${encodeURIComponent(body.id)}`,{method:'DELETE',headers:serviceHeaders});return new Response(JSON.stringify({ok:r.ok}),{status:r.ok?200:r.status,headers:jsonHeaders})}
+    if(body.action==='reset'){if(body.confirm!=='RESET_ALL_WORKOUTS')return new Response(JSON.stringify({error:'Confirmation required'}),{status:400,headers:jsonHeaders});const [r,m]=await Promise.all([fetch(`${workoutsApi}?id=not.is.null`,{method:'DELETE',headers:serviceHeaders}),fetch(`${manualWorkoutsApi}?id=not.is.null`,{method:'DELETE',headers:serviceHeaders})]);if(r.ok)await fetch(`${claimsApi}?player_id=not.is.null`,{method:'DELETE',headers:serviceHeaders});return new Response(JSON.stringify({ok:r.ok&&m.ok}),{status:r.ok&&m.ok?200:500,headers:jsonHeaders})}
     return new Response(JSON.stringify({error:'Bad request'}),{status:400,headers:jsonHeaders});
   }catch(e){console.error(e);return new Response(JSON.stringify({error:'Server error'}),{status:500,headers:jsonHeaders})}
 });

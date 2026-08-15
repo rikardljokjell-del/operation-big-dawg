@@ -60,8 +60,9 @@
     const original=ymd(row.created_at);
     const min=shiftYmd(original,-7);
     const plusSeven=shiftYmd(original,7);
-    const max=plusSeven<today()?plusSeven:today();
-    return{original,min,max};
+    const latest=row.entry_source==='manual'?shiftYmd(today(),-1):today();
+    const max=plusSeven<latest?plusSeven:latest;
+    return{original,min,max,manual:row.entry_source==='manual'};
   }
 
   function applyEditBounds(){
@@ -77,7 +78,7 @@
     if(field){
       let note=field.querySelector('.edit-date-rule');
       if(!note){note=document.createElement('small');note.className='edit-date-rule';field.appendChild(note)}
-      note.textContent=`Dato kan endres maks 7 dager fra originaldato (${bounds.original}), og aldri etter i dag. Tillatt: ${bounds.min} – ${bounds.max}.`;
+      note.textContent=bounds.manual?`Etterregistrerte økter kan flyttes maks 7 dager, men aldri til dagens eller en fremtidig dato. Tillatt: ${bounds.min} – ${bounds.max}.`:`Dato kan endres maks 7 dager fra originaldato (${bounds.original}), og aldri etter i dag. Tillatt: ${bounds.min} – ${bounds.max}.`;
     }
   }
 
@@ -143,7 +144,7 @@
       if(targetDate&&((min&&targetDate<min)||(max&&targetDate>max))){
         e.preventDefault();
         e.stopImmediatePropagation();
-        const msg=targetDate>today()?'Dato kan ikke settes frem i tid':`Dato må være mellom ${min} og ${max}`;
+        const msg=editing?.entry_source==='manual'&&targetDate>=today()?'Etterregistrerte økter kan ikke flyttes til dagens eller en fremtidig dato':targetDate>today()?'Dato kan ikke settes frem i tid':`Dato må være mellom ${min} og ${max}`;
         if(typeof toast==='function')toast(msg);else alert(msg);
       }
     }
