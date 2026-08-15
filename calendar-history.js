@@ -74,7 +74,7 @@
       out+=`<div class="calendar-week-tile ${week===current?'current':''} ${empty?'empty':''}"><div><span class="calendar-tile-label">UKE ${isoWeek(week)}</span><small class="calendar-tile-dates">${formatDay(week)}–${formatDay(addDaysYmd(week,6))}</small></div>${countMarkup(counts)}</div>`;
     }
     container.innerHTML=out;
-    return{start,end};
+    return{start:monthStart(startMonth),end:monthEnd(endMonth)};
   }
 
   function renderTwelveMonths(container,dow,list){
