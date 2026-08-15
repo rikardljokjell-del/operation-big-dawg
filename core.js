@@ -1,4 +1,4 @@
-const API='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/training-tracker-calendar-preview';
+const API='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/training-tracker';
 const PEOPLE=['Rikard','Adrian'],RANKS=['Couch Recruit','Rep Collector','Hemorrhoid Pumper','Protein Junkie','Pump Chaser','Iron Disciple','Disciplined Lifter','Big Dawg','Meat Machine','Gym Warlord'];
 const rankForLevel=level=>RANKS[Math.min(RANKS.length,Math.max(1,Number(level)||1))-1]||RANKS[RANKS.length-1];
 const FORMS=[
