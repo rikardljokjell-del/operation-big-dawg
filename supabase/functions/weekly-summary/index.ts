@@ -91,7 +91,8 @@ function mondayKey(input:string|Date){
   date.setUTCDate(date.getUTCDate()-(weekday-1));
   return date.toISOString().slice(0,10);
 }
-const latestCompletedWeek=()=>shiftYmd(mondayKey(new Date()),-7);
+const latestCompletedWeek=(referenceDate=new Date())=>shiftYmd(mondayKey(referenceDate),-7);
+const debugReferenceDate=()=>new Date(Date.now()+24*60*60*1000);
 const isTestPlayer=(player:Player)=>player.name.trim().toLocaleLowerCase('nb-NO')==='test';
 const rarity=(id:number)=>ELITE.has(id)?'elite':STRONG.has(id)?'strong':'normal';
 const xpForDays=(days:number)=>days===0?-6:WEEK_XP[Math.max(0,Math.min(7,days))];
@@ -303,7 +304,7 @@ async function getSummary(body:any){
   const viewer=players.find(player=>player.id===String(body.viewer_player_id||''));
   if(!viewer)return out({error:'Spiller finnes ikke'},404);
   const debug=isTestPlayer(viewer);
-  const weekStart=latestCompletedWeek();
+  const weekStart=latestCompletedWeek(debug?debugReferenceDate():new Date());
   const weekEnd=shiftYmd(weekStart,6);
 
   if(!debug&&osloYmd(viewer.created_at)>weekEnd)return out({show:false,reason:'PLAYER_CREATED_AFTER_WEEK',week_start:weekStart});
@@ -332,11 +333,14 @@ async function getSummary(body:any){
 async function dismissSummary(body:any){
   const viewerId=String(body.viewer_player_id||'');
   const weekStart=String(body.week_start||'');
-  if(!viewerId||weekStart!==latestCompletedWeek())return out({error:'Ugyldig sammendrag'},400);
+  if(!viewerId)return out({error:'Ugyldig sammendrag'},400);
   const players=(await api(`/players?id=eq.${encodeURIComponent(viewerId)}&select=id,name,character_set,created_at&limit=1`)) as Player[];
   const viewer=players?.[0];
   if(!viewer)return out({error:'Spiller finnes ikke'},404);
-  if(isTestPlayer(viewer))return out({ok:true,debug:true});
+  const debug=isTestPlayer(viewer);
+  const expectedWeek=latestCompletedWeek(debug?debugReferenceDate():new Date());
+  if(weekStart!==expectedWeek)return out({error:'Ugyldig sammendrag'},400);
+  if(debug)return out({ok:true,debug:true});
 
   const rows=await api(`/weekly_summary_deliveries?viewer_player_id=eq.${encodeURIComponent(viewerId)}&week_start=eq.${weekStart}`,{
     method:'PATCH',
