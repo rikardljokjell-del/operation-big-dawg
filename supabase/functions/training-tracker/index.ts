@@ -68,7 +68,7 @@ Deno.serve(async(req:Request)=>{
     if(body.action==='list_players'){const r=await fetch(`${playersApi}?select=id,name,character_set,created_at&order=created_at.asc`,{headers:serviceHeaders});return new Response(await r.text(),{status:r.status,headers:jsonHeaders})}
     if(body.action==='create_player'){
       const name=normalizeName(body.name),characterSet=Number(body.character_set),playerPin=String(body.player_pin??'');
-      if(!name||name.length>40||![1,2,3].includes(characterSet)||!validPlayerPin(playerPin))return new Response(JSON.stringify({error:'Ugyldig spillerdata'}),{status:400,headers:jsonHeaders});
+      if(!name||name.length>40||![1,2,3,4].includes(characterSet)||!validPlayerPin(playerPin))return new Response(JSON.stringify({error:'Ugyldig spillerdata'}),{status:400,headers:jsonHeaders});
       const existing=await resolvePlayer({name});if(existing)return new Response(JSON.stringify({error:'Navnet er allerede i bruk'}),{status:409,headers:jsonHeaders});
       const r=await fetch(playersApi,{method:'POST',headers:{...serviceHeaders,'Prefer':'return=representation'},body:JSON.stringify({name,character_set:characterSet,pin:playerPin})});
       if(!r.ok){const text=await r.text();if(r.status===409||text.includes('players_name_unique_ci'))return new Response(JSON.stringify({error:'Navnet er allerede i bruk'}),{status:409,headers:jsonHeaders});return new Response(text,{status:r.status,headers:jsonHeaders})}
