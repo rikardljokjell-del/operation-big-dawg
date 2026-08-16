@@ -4,12 +4,16 @@
   window.__OBD_PREVIEW__=true;
 
   const replacements=[
-    ['/functions/v1/training-tracker-preview','/functions/v1/training-tracker-preview'],
+    ['/functions/v1/training-tracker-character4-preview','/functions/v1/training-tracker-character4-preview'],
+    ['/functions/v1/admin-console-character4-preview','/functions/v1/admin-console-character4-preview'],
+    ['/functions/v1/training-tracker-preview','/functions/v1/training-tracker-character4-preview'],
+    ['/functions/v1/admin-console-preview','/functions/v1/admin-console-character4-preview'],
     ['/functions/v1/gym-game-preview','/functions/v1/gym-game-preview'],
     ['/functions/v1/starter-pokemon-preview','/functions/v1/starter-pokemon-preview'],
     ['/functions/v1/wild-attempt-preview','/functions/v1/wild-attempt-preview'],
     ['/functions/v1/test-debug-workout-preview','/functions/v1/test-debug-workout-preview'],
-    ['/functions/v1/training-tracker','/functions/v1/training-tracker-preview'],
+    ['/functions/v1/training-tracker','/functions/v1/training-tracker-character4-preview'],
+    ['/functions/v1/admin-console','/functions/v1/admin-console-character4-preview'],
     ['/functions/v1/gym-game','/functions/v1/gym-game-preview'],
     ['/functions/v1/starter-pokemon','/functions/v1/starter-pokemon-preview'],
     ['/functions/v1/wild-attempt','/functions/v1/wild-attempt-preview'],
