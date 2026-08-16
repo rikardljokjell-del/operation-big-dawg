@@ -1,5 +1,5 @@
 (()=>{
-  const LABEL={strength:'Styrke',cardio:'Kondis'};
+  const LABEL={strength:'Styrke',cardio:'Kondis',mobility:'Mobilitet'};
   const originalText=new WeakMap();
   const undoText=new WeakMap();
 

@@ -24,7 +24,7 @@ Deno.serve(async(req:Request)=>{
   try{
     const b=await req.json(),id=String(b.player_id||''),p=await getTestPlayer(id);if(!p)return out({error:'Debug access only for player test'},403);
     if(b.action==='add'){
-      const type=String(b.workout_type||'');if(!['strength','cardio'].includes(type))return out({error:'Bad request'},400);
+      const type=String(b.workout_type||'');if(!['strength','cardio','mobility'].includes(type))return out({error:'Bad request'},400);
       const created_at=await nextDate(id),a=await api(workouts,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({player_id:id,person:p.name,workout_type:type,created_at})}),workout=a?.[0]||null;
       let reward={reward_date:osloYmd(new Date(created_at)),reward_eligible:false};if(workout?.id){try{reward=await claimReward(id,created_at,type,workout.id)}catch(e){console.error('reward claim failed',e)}}
       return out({workout,...reward});

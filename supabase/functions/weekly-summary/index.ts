@@ -25,7 +25,7 @@ type Player = {
 type Workout = {
   id:string;
   player_id:string;
-  workout_type:'strength'|'cardio';
+  workout_type:'strength'|'cardio'|'mobility';
   created_at:string;
 };
 type GymEvent = {
@@ -145,11 +145,10 @@ function buildMotivation(player:Player,stats:any){
     };
   }
 
-  const focus=stats.strength>stats.cardio
-    ?'Styrke dominerte.'
-    :stats.cardio>stats.strength
-      ?'Kondisjon dominerte.'
-      :'Fin balanse mellom styrke og kondisjon.';
+  const focusCounts=[['Styrke',stats.strength],['Kondisjon',stats.cardio],['Mobilitet',stats.mobility]] as [string,number][];
+  const focusMax=Math.max(...focusCounts.map(([,count])=>count));
+  const focusLeaders=focusCounts.filter(([,count])=>count===focusMax&&count>0).map(([label])=>label);
+  const focus=focusLeaders.length===1?`${focusLeaders[0]} dominerte.`:'Fin balanse mellom økttypene.';
   const highlights:string[]=[];
   if(stats.streak_status==='continued')highlights.push(`${stats.streak} ukers streak lever videre`);
   else if(stats.streak_status==='started')highlights.push('ny streak er startet');
@@ -208,6 +207,7 @@ function createSnapshot(viewer:Player,selected:Player[],weekStart:string,data:{w
     const countTypes=(source:Workout[])=>({
       strength:source.filter(row=>row.workout_type==='strength').length,
       cardio:source.filter(row=>row.workout_type==='cardio').length,
+      mobility:source.filter(row=>row.workout_type==='mobility').length,
     });
     const allTime=countTypes(playerWorkouts);
     const last4=countTypes(playerWorkouts.filter(row=>mondayKey(row.created_at)>=fourWeekStart));
@@ -221,6 +221,7 @@ function createSnapshot(viewer:Player,selected:Player[],weekStart:string,data:{w
       workouts:targetWorkouts.length,
       strength:targetWorkouts.filter(row=>row.workout_type==='strength').length,
       cardio:targetWorkouts.filter(row=>row.workout_type==='cardio').length,
+      mobility:targetWorkouts.filter(row=>row.workout_type==='mobility').length,
       xp_delta:xpForDays(targetDays.length),
       streak,
       previous_streak:previousStreak,
@@ -246,6 +247,7 @@ function createSnapshot(viewer:Player,selected:Player[],weekStart:string,data:{w
         average_8_weeks:{
           strength:Number((last8.strength/8).toFixed(1)),
           cardio:Number((last8.cardio/8).toFixed(1)),
+          mobility:Number((last8.mobility/8).toFixed(1)),
         },
       },
     };
@@ -262,7 +264,7 @@ function createSnapshot(viewer:Player,selected:Player[],weekStart:string,data:{w
   const viewerStats=players.find(player=>player.id===viewer.id)||players[0];
 
   return{
-    schema_version:1,
+    schema_version:2,
     viewer_player_id:viewer.id,
     week:{start:weekStart,end:shiftYmd(weekStart,6)},
     coverage:{
@@ -319,7 +321,7 @@ async function getSummary(body:any){
   const delivery=await existingDelivery(viewer.id,weekStart);
 
   if(!debug&&delivery?.dismissed_at)return out({show:false,reason:'ALREADY_DISMISSED',week_start:weekStart});
-  if(!debug&&delivery?.snapshot?.schema_version===1){
+  if(!debug&&delivery?.snapshot?.schema_version===2){
     return out({show:true,debug:false,generated_at:delivery.generated_at,summary:delivery.snapshot});
   }
 
@@ -348,7 +350,7 @@ async function dismissSummary(body:any){
 
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
-  if(req.method==='GET')return out({ok:true,service:'weekly-summary',schema_version:1});
+  if(req.method==='GET')return out({ok:true,service:'weekly-summary',schema_version:2});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
   try{
     const body=await req.json();

@@ -39,12 +39,13 @@ async function benefitsFor(id,level){
   const p=await player(id),rows=await workoutRows(id),alloc=p?.stats_alloc||{},auto=autoStats(level);
   const strength=rows.filter(r=>r.workout_type==='strength').length;
   const cardio=rows.filter(r=>r.workout_type==='cardio').length;
+  const mobility=rows.filter(r=>r.workout_type==='mobility').length;
   const days=new Set(rows.map(r=>osloDay(r.created_at))).size;
   const values={
     power:1+(Number(auto.power)||0)+(Number(alloc.power)||0)+strength*.45,
     engine:1+(Number(auto.engine)||0)+(Number(alloc.engine)||0)+cardio*.45,
-    discipline:1+(Number(auto.discipline)||0)+(Number(alloc.discipline)||0)+days*.12,
-    grit:1+(Number(auto.grit)||0)+(Number(alloc.grit)||0)+(strength+cardio)*.15
+    discipline:1+(Number(auto.discipline)||0)+(Number(alloc.discipline)||0)+days*.12+mobility*.45,
+    grit:1+(Number(auto.grit)||0)+(Number(alloc.grit)||0)+(strength+cardio+mobility)*.15
   };
   const idx={};for(const k of Object.keys(values))idx[k]=tierIndex(values[k]);
   const powerRescue=POWER_RESCUE[idx.power],effectiveCatch=.5+.5*powerRescue;

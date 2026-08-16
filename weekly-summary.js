@@ -113,7 +113,7 @@
   function renderTrainingRanking(summary){
     const ranked=summary.training_ranking.map(item=>({...playerById(summary,item.id),rank:item.rank})).filter(player=>player.id);
     return `<section class="weekly-block"><div class="weekly-block-head"><div><span>WEEKLY SCOREBOARD</span><h3>Treningsdager</h3></div><small>Samme dag teller én gang</small></div><div class="weekly-ranking">${ranked.map(player=>`
-      <div class="weekly-rank-row ${player.rank<=3?'top':''}"><b class="weekly-rank-number">${rankLabel(player.rank)}</b>${avatar(player)}<span class="weekly-rank-copy"><strong>${esc(player.name)}</strong><small>S ${player.strength} · K ${player.cardio} · ${player.workouts} økt${player.workouts===1?'':'er'}</small></span><span class="weekly-rank-score"><strong>${player.training_days}</strong><small>DAGER</small></span></div>`).join('')}</div></section>`;
+      <div class="weekly-rank-row ${player.rank<=3?'top':''}"><b class="weekly-rank-number">${rankLabel(player.rank)}</b>${avatar(player)}<span class="weekly-rank-copy"><strong>${esc(player.name)}</strong><small>S ${player.strength} · K ${player.cardio} · M ${Number(player.mobility)||0} · ${player.workouts} økt${player.workouts===1?'':'er'}</small></span><span class="weekly-rank-score"><strong>${player.training_days}</strong><small>DAGER</small></span></div>`).join('')}</div></section>`;
   }
 
   function renderWeek(summary){
@@ -148,11 +148,11 @@
 
   function historyCell(value,average=false){
     const number=item=>average?Number(item||0).toLocaleString('nb-NO',{minimumFractionDigits:1,maximumFractionDigits:1}):Number(item||0).toLocaleString('nb-NO');
-    return `<span class="weekly-history-cell"><b class="s">S ${number(value.strength)}</b><b class="k">K ${number(value.cardio)}</b></span>`;
+    return `<span class="weekly-history-cell"><b class="s">S ${number(value.strength)}</b><b class="k">K ${number(value.cardio)}</b><b class="m">M ${number(value.mobility)}</b></span>`;
   }
 
   function renderHistory(summary){
-    return `<section class="weekly-block"><div class="weekly-block-head"><div><span>TRAINING HISTORY</span><h3>Sammenligning</h3></div><small>S = styrke · K = kondis</small></div><div class="weekly-history-wrap"><table class="weekly-history-table"><thead><tr><th>SPILLER</th><th>ALL-TIME</th><th>SISTE 4 UKER</th><th>SISTE 8 UKER</th><th>SNITT / UKE</th></tr></thead><tbody>${summary.players.map(player=>`<tr><td>${esc(player.name)}</td><td>${historyCell(player.history.all_time)}</td><td>${historyCell(player.history.last_4_weeks)}</td><td>${historyCell(player.history.last_8_weeks)}</td><td>${historyCell(player.history.average_8_weeks,true)}</td></tr>`).join('')}</tbody></table></div><p class="weekly-history-note">Kun vanlige, tellende økter er med. Etterregistrerte økter påvirker ikke spillet eller sammenligningen.</p></section>`;
+    return `<section class="weekly-block"><div class="weekly-block-head"><div><span>TRAINING HISTORY</span><h3>Sammenligning</h3></div><small>S = styrke · K = kondis · M = mobilitet</small></div><div class="weekly-history-wrap"><table class="weekly-history-table"><thead><tr><th>SPILLER</th><th>ALL-TIME</th><th>SISTE 4 UKER</th><th>SISTE 8 UKER</th><th>SNITT / UKE</th></tr></thead><tbody>${summary.players.map(player=>`<tr><td>${esc(player.name)}</td><td>${historyCell(player.history.all_time)}</td><td>${historyCell(player.history.last_4_weeks)}</td><td>${historyCell(player.history.last_8_weeks)}</td><td>${historyCell(player.history.average_8_weeks,true)}</td></tr>`).join('')}</tbody></table></div><p class="weekly-history-note">Kun vanlige, tellende økter er med. Etterregistrerte økter påvirker ikke spillet eller sammenligningen.</p></section>`;
   }
 
   function bindImageFallbacks(root){

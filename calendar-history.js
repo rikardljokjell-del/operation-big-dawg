@@ -30,13 +30,13 @@
   }
 
   function countTypes(list,predicate){
-    let strength=0,cardio=0;
-    list.forEach(row=>{if(!predicate(row))return;if(row.workout_type==='strength')strength++;if(row.workout_type==='cardio')cardio++});
-    return{strength,cardio};
+    let strength=0,cardio=0,mobility=0;
+    list.forEach(row=>{if(!predicate(row))return;if(row.workout_type==='strength')strength++;if(row.workout_type==='cardio')cardio++;if(row.workout_type==='mobility')mobility++});
+    return{strength,cardio,mobility};
   }
 
   function countMarkup(counts){
-    return `<div class="calendar-counts"><span class="calendar-count strength">S ${counts.strength}</span><span class="calendar-count cardio">K ${counts.cardio}</span></div>`;
+    return `<div class="calendar-counts"><span class="calendar-count strength">S ${counts.strength}</span><span class="calendar-count cardio">K ${counts.cardio}</span><span class="calendar-count mobility">M ${counts.mobility}</span></div>`;
   }
 
   function rangeLabel(start,end){
@@ -55,8 +55,8 @@
     dow.hidden=false;
     let out='';
     for(let i=0;i<56;i++){
-      const day=addDaysYmd(start,i),types=byDay.get(day)||new Set(),future=day>todayKey,title=[day,types.has('strength')?'Styrke':'',types.has('cardio')?'Kondisjon':''].filter(Boolean).join(' · ');
-      out+=`<div class="day ${types.size?'has':''} ${future?'future':''}" title="${title}">${types.has('strength')?'<span class="s">S</span>':''}${types.has('cardio')?'<span class="k">K</span>':''}</div>`;
+      const day=addDaysYmd(start,i),types=byDay.get(day)||new Set(),future=day>todayKey,title=[day,types.has('strength')?'Styrke':'',types.has('cardio')?'Kondisjon':'',types.has('mobility')?'Mobilitet':''].filter(Boolean).join(' · ');
+      out+=`<div class="day ${types.size?'has':''} ${future?'future':''}" title="${title}">${types.has('strength')?'<span class="s">S</span>':''}${types.has('cardio')?'<span class="k">K</span>':''}${types.has('mobility')?'<span class="m">M</span>':''}</div>`;
     }
     container.innerHTML=out;
     return{start,end};
@@ -70,7 +70,7 @@
     for(let week=start;week<=lastWeek;week=addDaysYmd(week,7)){
       const middle=addDaysYmd(week,3),rawCaption=monthKey(middle),caption=rawCaption<monthKey(monthStart(startMonth))?monthKey(monthStart(startMonth)):rawCaption>monthKey(monthEnd(endMonth))?monthKey(monthEnd(endMonth)):rawCaption;
       if(caption!==lastCaption){const [year,month]=caption.split('-').map(Number);out+=`<div class="calendar-period-caption">${formatMonth({year,month:month-1})}</div>`;lastCaption=caption}
-      const counts=countTypes(list,row=>mondayKey(row.created_at)===week),empty=counts.strength+counts.cardio===0;
+      const counts=countTypes(list,row=>mondayKey(row.created_at)===week),empty=counts.strength+counts.cardio+counts.mobility===0;
       out+=`<div class="calendar-week-tile ${week===current?'current':''} ${empty?'empty':''}"><div><span class="calendar-tile-label">UKE ${isoWeek(week)}</span><small class="calendar-tile-dates">${formatDay(week)}–${formatDay(addDaysYmd(week,6))}</small></div>${countMarkup(counts)}</div>`;
     }
     container.innerHTML=out;
@@ -83,7 +83,7 @@
     dow.hidden=true;
     let out='';
     for(let i=0;i<12;i++){
-      const item=monthParts(startMonth.year,startMonth.month,i),key=`${item.year}-${String(item.month+1).padStart(2,'0')}`,counts=countTypes(list,row=>monthKey(ymd(row.created_at))===key),empty=counts.strength+counts.cardio===0;
+      const item=monthParts(startMonth.year,startMonth.month,i),key=`${item.year}-${String(item.month+1).padStart(2,'0')}`,counts=countTypes(list,row=>monthKey(ymd(row.created_at))===key),empty=counts.strength+counts.cardio+counts.mobility===0;
       out+=`<div class="calendar-month-tile ${key===todayMonth?'current':''} ${empty?'empty':''}"><div><span class="calendar-month-name">${MONTHS[item.month]}</span><small class="calendar-month-year">${item.year}</small></div>${countMarkup(counts)}</div>`;
     }
     container.innerHTML=out;
@@ -154,7 +154,7 @@
   function renderSelectedStatus(){
     const label=document.getElementById('manualSelectedDate'),status=document.getElementById('manualDateStatus'),types=selectedDate?recordsForDate(selectedDate):new Set();
     label.textContent=selectedDate?formatLongDate(selectedDate):'Velg en dato';
-    status.innerHTML=!selectedDate?'':types.size?[types.has('strength')?'<span class="manual-status-chip s">S registrert</span>':'',types.has('cardio')?'<span class="manual-status-chip k">K registrert</span>':''].join(''):'<span class="manual-status-empty">Ingen økter registrert denne dagen</span>';
+    status.innerHTML=!selectedDate?'':types.size?[types.has('strength')?'<span class="manual-status-chip s">S registrert</span>':'',types.has('cardio')?'<span class="manual-status-chip k">K registrert</span>':'',types.has('mobility')?'<span class="manual-status-chip m">M registrert</span>':''].join(''):'<span class="manual-status-empty">Ingen økter registrert denne dagen</span>';
     chooseAvailableType(types);
   }
 
@@ -166,7 +166,7 @@
     document.getElementById('manualMonthNext').disabled=atCurrent;
     let out='';
     for(let i=0;i<42;i++){
-      const value=addDaysYmd(start,i),inMonth=value.slice(0,7)===first.slice(0,7),unavailable=value>=todayKey,types=recordsForDate(value),marks=`${types.has('strength')?'<span class="manual-day-mark s">S</span>':''}${types.has('cardio')?'<span class="manual-day-mark k">K</span>':''}`,status=[types.has('strength')?'S registrert':'',types.has('cardio')?'K registrert':''].filter(Boolean).join(', ');
+      const value=addDaysYmd(start,i),inMonth=value.slice(0,7)===first.slice(0,7),unavailable=value>=todayKey,types=recordsForDate(value),marks=`${types.has('strength')?'<span class="manual-day-mark s">S</span>':''}${types.has('cardio')?'<span class="manual-day-mark k">K</span>':''}${types.has('mobility')?'<span class="manual-day-mark m">M</span>':''}`,status=[types.has('strength')?'S registrert':'',types.has('cardio')?'K registrert':'',types.has('mobility')?'M registrert':''].filter(Boolean).join(', ');
       out+=`<button class="manual-calendar-day ${!inMonth?'other-month':''} ${unavailable?'unavailable':''} ${value===selectedDate?'selected':''}" type="button" data-manual-date="${value}" ${!inMonth||unavailable?'disabled':''} title="${value}${status?` · ${status}`:''}"><span class="manual-day-number">${Number(value.slice(8,10))}</span><span class="manual-day-marks">${marks}</span></button>`;
     }
     grid.innerHTML=out;
@@ -194,7 +194,7 @@
     if(busy)return;
     const person=activePlayer(),meta=typeof window.getPlayerMeta==='function'?window.getPlayerMeta(person):null,type=document.querySelector('input[name="manualWorkoutType"]:checked')?.value,time=document.getElementById('manualWorkoutTime').value,types=recordsForDate(selectedDate);
     if(!selectedDate||selectedDate>=today())return toast('Velg en dato før i dag');
-    if(!type||types.has(type))return toast(type==='cardio'?'Kondisjon er allerede registrert':'Styrke er allerede registrert');
+    if(!type||types.has(type))return toast(type==='strength'?'Styrke er allerede registrert':type==='cardio'?'Kondisjon er allerede registrert':'Mobilitet er allerede registrert');
     if(!time)return toast('Velg tidspunkt');
     setBusy(true);
     try{
