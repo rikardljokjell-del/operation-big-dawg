@@ -20,12 +20,9 @@
         let html=await response.text();
         const coreMarker='<script src="core.js"><\/script>';
         const authMarker='<script src="auth.js"><\/script>';
-        const playerEndMarker='        </div>\n      </div>\n    </div>\n  </div>\n\n  <main class="app-shell">';
-        if(!html.includes(coreMarker)||!html.includes(authMarker)||!html.includes(playerEndMarker))throw new Error('Preview-hooks mangler i index.html');
-        const adminButton=`        </div>\n        <button type="button" data-admin-entry="static" aria-label="Åpne admin" style="display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;z-index:20!important;margin:20px auto 4px!important;padding:9px 18px!important;min-width:84px!important;border:1px solid rgba(255,255,255,.35)!important;border-radius:999px!important;background:#101c27!important;color:#d8e4ee!important;font:900 10px/1 system-ui,sans-serif!important;letter-spacing:.12em!important;text-transform:lowercase!important;cursor:pointer!important" onclick="const f=document.getElementById('adminLoginForm');if(f)f.reset();const e=document.getElementById('adminLoginError');if(e)e.textContent='';const d=document.getElementById('adminLoginDialog');if(d){if(!d.open)d.showModal();setTimeout(()=>document.getElementById('adminPinInput')?.focus(),50)}else{alert('Adminmodulen er ikke lastet. Oppdater preview-siden.')}" >admin</button>\n      </div>\n    </div>\n  </div>\n\n  <main class="app-shell">`;
-        html=html.replace(playerEndMarker,adminButton);
-        html=html.replace(coreMarker,'<script src="preview-bootstrap.js"><\/script>\n  '+coreMarker);
-        html=html.replace(authMarker,authMarker+'\n  <script src="admin-preview.js"><\/script>');
+        if(!html.includes(coreMarker)||!html.includes(authMarker))throw new Error('Preview-hooks mangler i index.html');
+        html=html.replace(coreMarker,'<script src="preview-bootstrap.js?v=4"><\/script>\n  '+coreMarker);
+        html=html.replace(authMarker,authMarker+'\n  <script src="admin-v2-preview.js?v=1"><\/script>');
         document.open();document.write(html);document.close();
       }catch(error){
         document.body.innerHTML='<div class="loading"><div><strong>Preview kunne ikke startes</strong><small>'+String(error?.message||error)+'</small></div></div>';
