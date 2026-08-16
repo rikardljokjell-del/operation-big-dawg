@@ -2,12 +2,12 @@ const activePlayer=()=>{const p=typeof window.getSelectedPlayer==='function'?win
 
 function weekCard(p){
   const n=uniqueDays(p,currentWeek()),st=streakInfo(p),t=typesThisWeek(p),imm=nextImmediate(n),final=finalWeekXp(n),g=gained(n),status=n>=3?'good':'warn',pct=Math.min(100,n/3*100);
-  return `<div class="week-top"><div><span class="section-kicker">${p.toUpperCase()}</span><div class="week-name">Ukesmål</div></div><span class="pill ${status}">${n>=3?'STREAK SAFE':'TARGET 3'}</span></div><div class="week-score"><div class="week-count">${n} / 3</div><div class="week-target">${n}/7 tellende dager</div></div><div class="week-mini-progress"><span style="width:${pct}%"></span></div><div class="split"><span>🔥 ${st.current} ukers streak</span><span>S ${t.strength} · K ${t.cardio}</span></div><div class="motivation">${motivation(n)}</div><div class="forecast"><b>Opptjent:</b> +${g} XP<br><b>Hvis uka slutter nå:</b> ${final>=0?'+':''}${final} XP · ${verdict(n)}<br><span class="muted">Neste nye treningsdag: ${imm>0?'+'+imm+' XP':'ingen ekstra XP'}</span></div>`;
+  return `<div class="week-top"><div><span class="section-kicker">${p.toUpperCase()}</span><div class="week-name">Ukesmål</div></div><span class="pill ${status}">${n>=3?'STREAK SAFE':'TARGET 3'}</span></div><div class="week-score"><div class="week-count">${n} / 3</div><div class="week-target">${n}/7 tellende dager</div></div><div class="week-mini-progress"><span style="width:${pct}%"></span></div><div class="split"><span>🔥 ${st.current} ukers streak</span><span>S ${t.strength} · K ${t.cardio} · M ${t.mobility}</span></div><div class="motivation">${motivation(n)}</div><div class="forecast"><b>Opptjent:</b> +${g} XP<br><b>Hvis uka slutter nå:</b> ${final>=0?'+':''}${final} XP · ${verdict(n)}<br><span class="muted">Neste nye treningsdag: ${imm>0?'+'+imm+' XP':'ingen ekstra XP'}</span></div>`;
 }
 
 function personCard(p){
   const i=levelInfo(p),n=uniqueDays(p,currentWeek()),st=streakInfo(p),pct=i.level===10?100:i.inLevel*10,next=i.level===10?'MAX LEVEL':`${10-i.inLevel} XP til Level ${i.level+1}`,days=creditedRowsFor(p).length;
-  return `<div class="fighter-heading"><div><div class="fighter-name">${p}<span class="crown">♛</span></div><div class="fighter-rank">Level ${i.level} · ${i.rank}</div></div><span class="level-chip">LEVEL ${i.level}/10</span></div><div class="fighter-main"><div class="fighter-character">${fig(p,i.level)}</div><div class="fighter-metrics"><div class="metric"><span>TRENINGS-DAGER</span><strong>${days}</strong></div><div class="metric"><span>DENNE UKA</span><strong>${n}/3</strong></div><div class="metric streak"><span>STREAK</span><strong>🔥 ${st.current}</strong></div></div></div><div class="fighter-xp"><div class="fighter-xp-line"><strong>${i.xp} total XP</strong><span>${next}</span></div><div class="xpbar"><div class="xpfill" style="width:${pct}%"></div></div></div><div class="actions"><button class="btn strength" data-add="strength" data-person="${p}">＋ Styrke</button><button class="btn cardio" data-add="cardio" data-person="${p}">＋ Kondis</button><button class="btn undo" data-undo="${p}">Angre siste økt</button></div>`;
+  return `<div class="fighter-heading"><div><div class="fighter-name">${p}<span class="crown">♛</span></div><div class="fighter-rank">Level ${i.level} · ${i.rank}</div></div><span class="level-chip">LEVEL ${i.level}/10</span></div><div class="fighter-main"><div class="fighter-character">${fig(p,i.level)}</div><div class="fighter-metrics"><div class="metric"><span>TRENINGS-DAGER</span><strong>${days}</strong></div><div class="metric"><span>DENNE UKA</span><strong>${n}/3</strong></div><div class="metric streak"><span>STREAK</span><strong>🔥 ${st.current}</strong></div></div></div><div class="fighter-xp"><div class="fighter-xp-line"><strong>${i.xp} total XP</strong><span>${next}</span></div><div class="xpbar"><div class="xpfill" style="width:${pct}%"></div></div></div><div class="actions"><button class="btn strength" data-add="strength" data-person="${p}">＋ Styrke</button><button class="btn cardio" data-add="cardio" data-person="${p}">＋ Kondis</button><button class="btn mobility" data-add="mobility" data-person="${p}">＋ Mobilitet</button><button class="btn undo" data-undo="${p}">Angre siste økt</button></div>`;
 }
 
 function evolutionCard(p){
@@ -77,7 +77,7 @@ function renderHeat(){
     let out='';
     for(let i=0;i<56;i++){
       const d=addDaysYmd(start,i),set=m.get(d)||new Set(),future=d>today;
-      out+=`<div class="day ${set.size?'has':''} ${future?'future':''}" title="${d}">${set.has('strength')?'<span class="s">S</span>':''}${set.has('cardio')?'<span class="k">K</span>':''}</div>`;
+      out+=`<div class="day ${set.size?'has':''} ${future?'future':''}" title="${d}">${set.has('strength')?'<span class="s">S</span>':''}${set.has('cardio')?'<span class="k">K</span>':''}${set.has('mobility')?'<span class="m">M</span>':''}</div>`;
     }
     h.innerHTML=out;
   });
@@ -98,7 +98,7 @@ function renderForm(){
 function renderHistory(){
   const p=activePlayer(),filtered=typeof historyRowsForPlayer==='function'?historyRowsForPlayer(p):rowsForPlayer(p),list=filtered.slice(0,visibleHistory),h=$('history');
   h.innerHTML=!list.length?`<div class="muted" style="text-align:center;padding:18px">Ingen økter logget for ${p} ennå.</div>`:list.map(r=>{
-    const d=new Date(r.created_at),date=d.toLocaleDateString('nb-NO',{day:'2-digit',month:'short',year:'2-digit',timeZone:'Europe/Oslo'}),time=d.toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Oslo'}),label=r.workout_type==='strength'?'Styrke':'Kondis',manual=r.entry_source==='manual';
+    const d=new Date(r.created_at),date=d.toLocaleDateString('nb-NO',{day:'2-digit',month:'short',year:'2-digit',timeZone:'Europe/Oslo'}),time=d.toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Oslo'}),label=r.workout_type==='strength'?'Styrke':r.workout_type==='cardio'?'Kondis':'Mobilitet',manual=r.entry_source==='manual';
     return `<div class="row" data-id="${r.id}" data-source="${manual?'manual':'normal'}"><div class="left"><span class="dot ${r.workout_type}"></span><div><div class="who">${r.person}</div><div class="kind">${label}${manual?'<span class="history-source-badge">ETTERREGISTRERT</span>':''}</div></div></div><div class="when">${date}<br>${time}</div></div>`;
   }).join('');
   document.querySelectorAll('.row[data-id]').forEach(el=>el.onclick=()=>openEdit(el.dataset.id));
@@ -138,7 +138,7 @@ async function refresh(silent=true){try{rows=await call({action:'list'});render(
 async function addWorkout(person,type){
   if(busy)return;
   try{const c=ensureAudio();if(c.state==='suspended')c.resume()}catch{}
-  const label=type==='strength'?'styrke':'kondis';
+  const label=type==='strength'?'styrke':type==='cardio'?'kondis':'mobilitet';
   if(!confirm(`Registrere ${label} for ${person} nå?`))return;
   const beforeInfo=levelInfo(person),beforeDays=uniqueDays(person,currentWeek()),opponents=PEOPLE.filter(p=>p!==person),maxOpponentDays=opponents.length?Math.max(...opponents.map(p=>uniqueDays(p,currentWeek()))):-1;
   setBusy(true);
@@ -155,7 +155,7 @@ async function addWorkout(person,type){
 
 async function undoWorkout(person){if(busy)return;if(!confirm(`Angre siste registrerte økt for ${person}?`))return;const meta=typeof window.getPlayerMeta==='function'?window.getPlayerMeta(person):null;setBusy(true);try{const r=await call({action:'undo',person,player_id:meta?.id||undefined});await refresh(true);toast(r.deleted?'Siste økt fjernet':'Ingen økt å angre')}catch(e){toast(e.message)}finally{setBusy(false)}}
 function toLocalInput(date){const d=new Date(date),pad=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
-function openEdit(id){editing=rows.find(r=>r.id===id);if(!editing)return;$('editMeta').textContent=`${editing.person} · ${editing.workout_type==='strength'?'Styrke':'Kondis'}${editing.entry_source==='manual'?' · Etterregistrert':''}`;$('editDate').value=toLocalInput(editing.created_at);$('editDialog').showModal()}
+function openEdit(id){editing=rows.find(r=>r.id===id);if(!editing)return;$('editMeta').textContent=`${editing.person} · ${editing.workout_type==='strength'?'Styrke':editing.workout_type==='cardio'?'Kondis':'Mobilitet'}${editing.entry_source==='manual'?' · Etterregistrert':''}`;$('editDate').value=toLocalInput(editing.created_at);$('editDialog').showModal()}
 $('cancelEdit').onclick=()=>$('editDialog').close();
 $('saveEdit').onclick=async()=>{if(!editing||busy)return;const val=$('editDate').value;if(!val)return toast('Velg dato og tid');if(!confirm('Lagre ny dato/tid for økten?'))return;setBusy(true);try{await call({action:'edit',id:editing.id,source:editing.entry_source==='manual'?'manual':'normal',created_at:new Date(val).toISOString()});$('editDialog').close();await refresh(true);toast('Økten er oppdatert')}catch(e){toast(e.message)}finally{setBusy(false)}};
 $('deleteEdit').onclick=async()=>{if(!editing||busy)return;if(!confirm('Slette denne økten permanent?'))return;setBusy(true);try{await call({action:'delete',id:editing.id,source:editing.entry_source==='manual'?'manual':'normal'});$('editDialog').close();await refresh(true);toast('Økten er slettet')}catch(e){toast(e.message)}finally{setBusy(false)}};

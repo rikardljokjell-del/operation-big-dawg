@@ -1,0 +1,26 @@
+/* First-class Mobility workout visuals. Loaded last so the new type can extend legacy layouts safely. */
+.actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.btn.mobility{background:linear-gradient(135deg,#7657ef,#bd74ff);color:#fff}
+.day .m,.manual-day-mark.m{color:#c6a8ff}
+.dot.mobility{background:#a678ff;box-shadow:0 0 8px rgba(166,120,255,.35)}
+
+.calendar-counts{grid-template-columns:repeat(3,1fr)}
+.calendar-count.mobility{color:#c6a8ff;border:1px solid rgba(166,120,255,.14)}
+.manual-status-chip.m{color:#c6a8ff;border-color:rgba(166,120,255,.2)}
+.manual-type-grid{grid-template-columns:repeat(3,1fr)}
+.manual-mobility span{color:#c6a8ff}
+.manual-mobility:has(input:checked){border-color:#a678ff;box-shadow:inset 0 0 0 1px rgba(166,120,255,.15)}
+
+.stat-burst.mobility{border-color:rgba(166,120,255,.42)}
+.weekly-history-cell .m{color:#c6a8ff}
+
+.obd-confirm[data-kind="mobility"] .obd-confirm-card{border-color:rgba(166,120,255,.46);box-shadow:0 28px 90px rgba(0,0,0,.62),0 0 34px rgba(166,120,255,.11)}
+.obd-confirm[data-kind="mobility"] .obd-confirm-card:before{background:#a678ff;opacity:.11}
+.obd-confirm[data-kind="mobility"] .obd-confirm-icon{background:rgba(166,120,255,.11);border-color:rgba(166,120,255,.28)}
+.obd-confirm[data-kind="mobility"] .obd-confirm-kicker{color:#c6a8ff}
+.obd-confirm[data-kind="mobility"] .obd-confirm-btn.primary{background:linear-gradient(135deg,#7657ef,#bd74ff);color:#fff;box-shadow:0 8px 22px rgba(166,120,255,.18)}
+
+@media(max-width:370px){
+  .actions{grid-template-columns:1fr 1fr}
+  .actions .mobility{grid-column:1/-1}
+}

@@ -58,7 +58,7 @@
     const fill=el('payoffFill');
 
     kicker.textContent=delta>0?'WORKOUT LOCKED IN':'DOUBLE DOWN';
-    title.textContent=detail.type==='cardio'?'Kondis registrert':'Styrke registrert';
+    title.textContent=detail.type==='strength'?'Styrke registrert':detail.type==='cardio'?'Kondis registrert':'Mobilitet registrert';
     xpEl.classList.toggle('zero',delta===0);
     xpEl.textContent=delta>0?'+0 XP':'ØKT LOGGET';
     if(detail.levelAfter>=10)sub.textContent=`Level 10 · ${detail.rank||'Gym Warlord'}`;
@@ -121,11 +121,13 @@
     if(confirmResolver)closeConfirm(false);
     const isUndo=kind==='undo';
     const isCardio=kind==='cardio';
+    const isMobility=kind==='mobility';
     wrap.dataset.kind=kind;
-    el('obdConfirmIcon').textContent=isUndo?'↶':isCardio?'⚡':'💪';
-    el('obdConfirmKicker').textContent=isUndo?'ANGRE SISTE ØKT':isCardio?'KONDIS':'STYRKE';
-    el('obdConfirmTitle').textContent=isUndo?'Fjerne siste økt?':`Registrer ${isCardio?'kondis':'styrke'}?`;
-    el('obdConfirmText').textContent=isUndo?`Siste registrerte økt for ${person} blir fjernet.`:`Legg inn ${isCardio?'kondis':'styrke'} for ${person} nå.`;
+    const label=isMobility?'mobilitet':isCardio?'kondis':'styrke';
+    el('obdConfirmIcon').textContent=isUndo?'↶':isMobility?'🧘':isCardio?'⚡':'💪';
+    el('obdConfirmKicker').textContent=isUndo?'ANGRE SISTE ØKT':isMobility?'MOBILITET':isCardio?'KONDIS':'STYRKE';
+    el('obdConfirmTitle').textContent=isUndo?'Fjerne siste økt?':`Registrer ${label}?`;
+    el('obdConfirmText').textContent=isUndo?`Siste registrerte økt for ${person} blir fjernet.`:`Legg inn ${label} for ${person} nå.`;
     el('obdConfirmOk').textContent=isUndo?'Angre økt':'Registrer';
     wrap.classList.add('show');
     wrap.setAttribute('aria-hidden','false');

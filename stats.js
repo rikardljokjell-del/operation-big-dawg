@@ -8,7 +8,7 @@
   const DESCRIPTIONS={
     power:'Råstyrke. Styrkeøkter mater denne hardest.',
     engine:'Motor og arbeidskapasitet. Kondis bygger denne raskest.',
-    discipline:'Evnen til å møte opp. Nye treningsdager bygger disiplin.',
+    discipline:'Evnen til å møte opp. Mobilitet og nye treningsdager bygger disiplin.',
     grit:'Mental seighet. Alle økter legger litt stål i ryggraden.'
   };
   const empty=()=>({power:0,engine:0,discipline:0,grit:0});
@@ -47,12 +47,13 @@
     const list=typeof rowsForPlayer==='function'?rowsForPlayer(person):[];
     const strength=list.filter(r=>r.workout_type==='strength').length;
     const cardio=list.filter(r=>r.workout_type==='cardio').length;
+    const mobility=list.filter(r=>r.workout_type==='mobility').length;
     const days=new Set(list.map(r=>ymd(r.created_at))).size;
     return {
       power:strength*.45,
       engine:cardio*.45,
-      discipline:days*.12,
-      grit:(strength+cardio)*.15
+      discipline:days*.12+mobility*.45,
+      grit:(strength+cardio+mobility)*.15
     };
   }
   function stateFor(person){
@@ -234,7 +235,7 @@
     if(!detail)return;
     if(detail.levelBefore<2&&detail.levelAfter>=2){pendingUnlock=detail.person;return}
     if(detail.levelAfter<2)return;
-    const main=detail.type==='strength'?'+0.45 POWER':'+0.45 ENGINE';
+    const main=detail.type==='strength'?'+0.45 POWER':detail.type==='cardio'?'+0.45 ENGINE':'+0.45 DISCIPLINE';
     const extra=['+0.15 GRIT'];if(detail.newTrainingDay)extra.push('+0.12 DISCIPLINE');
     setTimeout(()=>showBurst('STAT GAIN',`${main} · ${extra.join(' · ')}`,detail.type),900);
   }
