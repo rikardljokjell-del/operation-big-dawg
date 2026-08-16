@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Operation Big Dawg · Preview</title>
+  <style>
+    html,body{margin:0;min-height:100%;background:#050b12;color:#fff;font-family:system-ui,sans-serif}
+    .loading{min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box}
+    .loading strong{display:block;font-size:18px}.loading small{display:block;margin-top:7px;color:#8fa4b7}
+  </style>
+</head>
+<body>
+  <div class="loading"><div><strong>Laster preview…</strong><small>Admin + reversering av spillbelønninger</small></div></div>
+  <script>
+    (async()=>{
+      try{
+        const response=await fetch('/index.html?preview-source=1',{cache:'no-store'});
+        if(!response.ok)throw new Error('Kunne ikke laste index.html');
+        let html=await response.text();
+        const marker='<script src="core.js"><\/script>';
+        const injected='<script src="preview-bootstrap.js"><\/script>\n  '+marker;
+        if(!html.includes(marker))throw new Error('Preview-hook mangler i index.html');
+        html=html.replace(marker,injected);
+        document.open();document.write(html);document.close();
+      }catch(error){
+        document.body.innerHTML='<div class="loading"><div><strong>Preview kunne ikke startes</strong><small>'+String(error?.message||error)+'</small></div></div>';
+      }
+    })();
+  </script>
+</body>
+</html>
