@@ -18,10 +18,11 @@
         const response=await fetch('/index.html?preview-source=1',{cache:'no-store'});
         if(!response.ok)throw new Error('Kunne ikke laste index.html');
         let html=await response.text();
-        const marker='<script src="core.js"><\/script>';
-        const injected='<script src="preview-bootstrap.js"><\/script>\n  '+marker;
-        if(!html.includes(marker))throw new Error('Preview-hook mangler i index.html');
-        html=html.replace(marker,injected);
+        const coreMarker='<script src="core.js"><\/script>';
+        const authMarker='<script src="auth.js"><\/script>';
+        if(!html.includes(coreMarker)||!html.includes(authMarker))throw new Error('Preview-hooks mangler i index.html');
+        html=html.replace(coreMarker,'<script src="preview-bootstrap.js"><\/script>\n  '+coreMarker);
+        html=html.replace(authMarker,authMarker+'\n  <script src="admin-preview.js"><\/script>');
         document.open();document.write(html);document.close();
       }catch(error){
         document.body.innerHTML='<div class="loading"><div><strong>Preview kunne ikke startes</strong><small>'+String(error?.message||error)+'</small></div></div>';
