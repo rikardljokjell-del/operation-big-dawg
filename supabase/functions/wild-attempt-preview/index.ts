@@ -39,12 +39,13 @@ function rarityPenalty(id:number){return ELITE.has(id)?.12:STRONG.has(id)?.06:0}
 function catchChance(base:number,hpRatio:number,turns:number,resolution:string,pokemonId:number){
   const safeBase=clamp(Number(base)||.5,.25,1),penalty=rarityPenalty(pokemonId);
   if(resolution==='auto')return clamp(safeBase*.72-penalty,.30,.78);
-  return clamp(safeBase*.72-penalty+(1-clamp(hpRatio,0,1))*.48+clamp(turns,0,3)*.015,.30,.95);
+  const turnBonus=Math.min(8,Math.max(0,Number(turns)||0))*.005;
+  return clamp(safeBase*.72-penalty+(1-clamp(hpRatio,0,1))*.48+turnBonus,.30,.95);
 }
 
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
-  if(req.method==='GET')return out({ok:true,service:'wild-attempt-preview-battle-v2'});
+  if(req.method==='GET')return out({ok:true,service:'wild-attempt-preview-battle-v3'});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
   try{
     const b=await req.json(),id=String(b.player_id||''),workoutId=String(b.workout_id||''),level=await levelForPlayer(id);
@@ -63,7 +64,7 @@ Deno.serve(async(req:Request)=>{
     if(!registeredAt||registeredAt<appeared||registeredAt>expires)return out({wild:w,benefits:benefit,attempted:false,error:'Workout outside encounter'});
 
     const pokemonId=Number(w.pokemon_id),resolution=b.resolution==='battle'?'battle':'auto';
-    const turns=resolution==='battle'?clamp(Math.floor(Number(b.turns)||0),0,3):0;
+    const turns=resolution==='battle'?clamp(Math.floor(Number(b.turns)||0),0,999):0;
     const hpRatio=resolution==='battle'?clamp(Number(b.hp_ratio??1),0,1):1;
     const fainted=resolution==='battle'&&(!!b.fainted||hpRatio<=0),playerFainted=resolution==='battle'&&!!b.player_fainted;
     const baseChance=Number(benefit?.tiers?.power?.effective_catch)||.5;
