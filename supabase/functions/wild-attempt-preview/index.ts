@@ -22,6 +22,7 @@ async function wild(id:string){const a=await api(`/wild_pokemon_state?player_id=
 async function gym(id:string){let a=await api(`/gym_player_state?player_id=eq.${encodeURIComponent(id)}&select=*&limit=1`);if(a?.[0])return a[0];a=await api('/gym_player_state',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({player_id:id,current_cycle:0,current_leader:0,damage:0,leader_defeated:false,initial_round_complete:false})});return a?.[0]||null}
 async function patchGym(id:string,body:Record<string,unknown>){const a=await api(`/gym_player_state?player_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({...body,updated_at:new Date().toISOString()})});return a?.[0]||null}
 async function patchWild(id:string,body:Record<string,unknown>){const a=await api(`/wild_pokemon_state?player_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({...body,updated_at:new Date().toISOString()})});return a?.[0]||null}
+async function patchWildFiltered(id:string,query:string,body:Record<string,unknown>){const a=await api(`/wild_pokemon_state?player_id=eq.${encodeURIComponent(id)}&${query}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({...body,updated_at:new Date().toISOString()})});return a?.[0]||null}
 function addHours(date:Date,minHours:number,maxHours:number){const mins=Math.floor((minHours+Math.random()*(maxHours-minHours))*60);return new Date(date.getTime()+mins*60000)}
 async function startCooldown(id:string,w:any,outcome:string,workoutId:string|null,success=false){
   const pokemonId=Number(w?.pokemon_id||0);
@@ -48,10 +49,22 @@ function catchChance(base:number,hpRatio:number,turns:number,resolution:string,p
   return clamp(safeBase*.72-penalty+(1-clamp(hpRatio,0,1))*.48+turnBonus,.30,.95);
 }
 
+async function validateWorkout(id:string,workoutId:string,w:any){
+  const workouts=await api(`/workouts?id=eq.${encodeURIComponent(workoutId)}&player_id=eq.${encodeURIComponent(id)}&select=id,created_at&limit=1`),workout=workouts?.[0];
+  if(!workout)return{ok:false,error:'Workout not found',workout:null,registeredAt:0};
+  const claims=await api(`/workout_reward_claims?first_workout_id=eq.${encodeURIComponent(workoutId)}&player_id=eq.${encodeURIComponent(id)}&select=first_workout_id,claimed_at&limit=1`),claim=claims?.[0];
+  const registeredAt=new Date(claim?.claimed_at||workout.created_at).getTime();
+  const appeared=new Date(w?.appeared_at||0).getTime(),expires=new Date(w?.expires_at||0).getTime();
+  if(!registeredAt||!appeared||!expires||registeredAt<appeared||registeredAt>expires)return{ok:false,error:'Workout outside encounter',workout,registeredAt};
+  return{ok:true,error:null,workout,registeredAt};
+}
+
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
-  if(req.method==='GET')return out({ok:true,service:'wild-attempt-preview-cooldown-v4'});
+  if(req.method==='GET')return out({ok:true,service:'wild-attempt-preview-validated-v5'});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
+  let claimed:any=null;
+  let claimedId='';
   try{
     const b=await req.json(),id=String(b.player_id||''),workoutId=String(b.workout_id||''),level=await levelForPlayer(id);
     if(String(b.pin||'')!==PIN)return out({error:'Feil PIN'},403);
@@ -68,15 +81,16 @@ Deno.serve(async(req:Request)=>{
     }
 
     let w=await wild(id);const benefit=await benefits(id,level);
-    if(!w||w.status!=='active'||!w.pokemon_id)return out({wild:w,benefits:benefit,attempted:false});
+    if(!w)return out({wild:null,benefits:benefit,attempted:false,eligible:false});
+    if(w.status==='cooldown')return out({wild:w,benefits:benefit,attempted:false,eligible:false,already_resolved:true,success:!!w.last_catch_success,pokemon_id:w.last_result_pokemon||null});
+    if(w.status==='resolving')return out({wild:w,benefits:benefit,attempted:false,eligible:false,resolving:true,error:'Encounter already resolving'});
+    if(w.status!=='active'||!w.pokemon_id)return out({wild:w,benefits:benefit,attempted:false,eligible:false});
     const now=Date.now(),appeared=new Date(w.appeared_at||0).getTime(),expires=new Date(w.expires_at||0).getTime();
-    if(!appeared||!expires||now>expires){w=await startCooldown(id,w,'fled',null,false);return out({wild:w,benefits:benefit,attempted:false,expired:true,cooldown_started:true});}
+    if(!appeared||!expires||now>expires){w=await startCooldown(id,w,'fled',null,false);return out({wild:w,benefits:benefit,attempted:false,eligible:false,expired:true,cooldown_started:true});}
 
-    const workouts=await api(`/workouts?id=eq.${encodeURIComponent(workoutId)}&player_id=eq.${encodeURIComponent(id)}&select=id,created_at&limit=1`),workout=workouts?.[0];
-    if(!workout)return out({wild:w,benefits:benefit,attempted:false,error:'Workout not found'});
-    const claims=await api(`/workout_reward_claims?first_workout_id=eq.${encodeURIComponent(workoutId)}&player_id=eq.${encodeURIComponent(id)}&select=first_workout_id,claimed_at&limit=1`),claim=claims?.[0];
-    const registeredAt=new Date(claim?.claimed_at||workout.created_at).getTime();
-    if(!registeredAt||registeredAt<appeared||registeredAt>expires)return out({wild:w,benefits:benefit,attempted:false,error:'Workout outside encounter'});
+    const validation=await validateWorkout(id,workoutId,w);
+    if(b.action==='wild_validate')return out({wild:w,benefits:benefit,attempted:false,eligible:validation.ok,error:validation.error,registered_at:validation.registeredAt?new Date(validation.registeredAt).toISOString():null});
+    if(!validation.ok)return out({wild:w,benefits:benefit,attempted:false,eligible:false,error:validation.error});
 
     const pokemonId=Number(w.pokemon_id),resolution=b.resolution==='battle'?'battle':'auto';
     const turns=resolution==='battle'?clamp(Math.floor(Number(b.turns)||0),0,999):0;
@@ -85,13 +99,28 @@ Deno.serve(async(req:Request)=>{
     const baseChance=Number(benefit?.tiers?.power?.effective_catch)||.5;
     const chance=fainted||playerFainted?0:catchChance(baseChance,hpRatio,turns,resolution,pokemonId);
     const success=!fainted&&!playerFainted&&Math.random()<chance;
+    const outcome=fainted?'fainted':playerFainted?'escaped':success?'caught':'missed';
+
+    claimed=await patchWildFiltered(id,`status=eq.active&pokemon_id=eq.${pokemonId}&version=eq.${Number(w.version||1)}`,{status:'resolving',attempt_workout_id:validation.workout.id,version:Number(w.version||1)+1});
+    if(!claimed){
+      const latest=await wild(id);
+      return out({wild:latest,benefits:benefit,attempted:false,eligible:false,already_resolved:latest?.status==='cooldown',resolving:latest?.status==='resolving',success:!!latest?.last_catch_success,pokemon_id:latest?.last_result_pokemon||pokemonId});
+    }
+    claimedId=id;
+
     if(success){
       const g=await gym(id),owned=[...new Set([...nums(g?.owned_pokemon),pokemonId])].sort((a,b)=>a-b),party=nums(g?.active_party).filter(x=>owned.includes(x)).slice(0,6);
       if(party.length<6&&!party.includes(pokemonId))party.push(pokemonId);
       await patchGym(id,{owned_pokemon:owned,active_party:party,version:Number(g?.version||1)+1});
     }
-    const outcome=fainted?'fainted':playerFainted?'escaped':success?'caught':'missed';
-    w=await startCooldown(id,w,outcome,workout.id,success);
-    return out({wild:w,benefits:benefit,attempted:true,success,pokemon_id:pokemonId,catch_chance:chance,base_catch_chance:baseChance,resolution,hp_ratio:hpRatio,turns,fainted,player_fainted:playerFainted,cooldown_started:true,registered_at:new Date(registeredAt).toISOString()});
-  }catch(error){console.error(error);return out({error:'Server error'},500)}
+
+    w=await patchWildFiltered(id,`status=eq.resolving&attempt_workout_id=eq.${encodeURIComponent(validation.workout.id)}`,{status:'cooldown',pokemon_id:null,expires_at:null,next_spawn_at:addHours(new Date(),3,8).toISOString(),last_result_pokemon:pokemonId,last_catch_success:success,last_outcome:outcome,version:Number(claimed.version||Number(w.version||1)+1)+1});
+    if(!w)throw new Error('Failed to finalize Wild cooldown');
+    claimed=null;claimedId='';
+    return out({wild:w,benefits:benefit,attempted:true,eligible:true,success,pokemon_id:pokemonId,catch_chance:chance,base_catch_chance:baseChance,resolution,hp_ratio:hpRatio,turns,fainted,player_fainted:playerFainted,cooldown_started:true,registered_at:new Date(validation.registeredAt).toISOString()});
+  }catch(error){
+    console.error('wild-attempt-preview-v5',error);
+    if(claimed&&claimedId){try{await patchWildFiltered(claimedId,`status=eq.resolving&attempt_workout_id=eq.${encodeURIComponent(String(claimed.attempt_workout_id||''))}`,{status:'active',attempt_workout_id:null,version:Number(claimed.version||1)+1})}catch(rollbackError){console.error('wild rollback failed',rollbackError)}}
+    return out({error:'Server error'},500);
+  }
 });
