@@ -28,12 +28,13 @@ async function startCooldown(id:string,w:any,outcome:string,workoutId:string|nul
   return await patchWild(id,{status:'cooldown',pokemon_id:null,expires_at:null,next_spawn_at:addHours(new Date(),3,8).toISOString(),attempt_workout_id:workoutId,last_result_pokemon:pokemonId||w?.last_result_pokemon||null,last_catch_success:success,last_outcome:outcome,version:Number(w?.version||1)+1});
 }
 
-async function benefits(id:string,level:number){
-  const r=await fetch(`${U}/functions/v1/gym-game-preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'benefits',player_id:id,level,pin:PIN})});
+async function gymPreview(payload:Record<string,unknown>){
+  const r=await fetch(`${U}/functions/v1/gym-game-preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,pin:PIN})});
   const text=await r.text();let data:any={};try{data=text?JSON.parse(text):{}}catch{}
-  if(!r.ok)throw new Error(data.error||text||'Benefits failed');
-  return data.benefits||{};
+  if(!r.ok)throw new Error(data.error||text||'Gym preview failed');
+  return data;
 }
+async function benefits(id:string,level:number){return (await gymPreview({action:'benefits',player_id:id,level})).benefits||{}}
 function osloDay(ts:string|Date){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Oslo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(ts instanceof Date?ts:new Date(ts)),v:any={};for(const p of parts)if(p.type!=='literal')v[p.type]=p.value;return`${v.year}-${v.month}-${v.day}`}
 function mondayKey(ts:string|Date){const value=osloDay(ts),[y,m,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,m-1,d)),dow=date.getUTCDay()||7;date.setUTCDate(date.getUTCDate()-(dow-1));return date.toISOString().slice(0,10)}
 function shiftDay(value:string,days:number){const [y,m,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,m-1,d+days));return date.toISOString().slice(0,10)}
@@ -56,6 +57,16 @@ Deno.serve(async(req:Request)=>{
     if(String(b.pin||'')!==PIN)return out({error:'Feil PIN'},403);
     const p=await player(id);if(!p)return out({error:'Spiller finnes ikke'},404);
     if(!p.starter_event_completed_at)return out({locked:true,attempted:false,error:'Wild Pokémon er ikke låst opp'},200);
+
+    if(b.action==='wild_status'){
+      let w=await wild(id);
+      if(!w)return out(await gymPreview({action:'wild_status',player_id:id,level}));
+      const now=Date.now(),expires=w.expires_at?new Date(w.expires_at).getTime():0,next=w.next_spawn_at?new Date(w.next_spawn_at).getTime():0;
+      if(w.status==='active'&&(!expires||expires<=now))w=await startCooldown(id,w,'fled',null,false);
+      else if(w.status==='cooldown'&&next&&next<=now)return out(await gymPreview({action:'wild_status',player_id:id,level}));
+      return out({wild:w,benefits:await benefits(id,level),level});
+    }
+
     let w=await wild(id);const benefit=await benefits(id,level);
     if(!w||w.status!=='active'||!w.pokemon_id)return out({wild:w,benefits:benefit,attempted:false});
     const now=Date.now(),appeared=new Date(w.appeared_at||0).getTime(),expires=new Date(w.expires_at||0).getTime();
