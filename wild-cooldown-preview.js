@@ -1,7 +1,7 @@
 (()=>{
   if(!window.__OBD_PREVIEW__)return;
-  if(window.__obdWildCooldownPreviewV4)return;
-  window.__obdWildCooldownPreviewV4=true;
+  if(window.__obdWildCooldownPreviewV5)return;
+  window.__obdWildCooldownPreviewV5=true;
 
   const PREVIEW_WILD='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/wild-attempt-preview';
   const PIN='1337';
@@ -45,7 +45,7 @@
 
   function install(){
     const current=window.fetch;
-    if(current?.__obdWildCooldownPreviewFinalV4)return;
+    if(current?.__obdWildCooldownPreviewFinalV5)return;
     const upstream=current.bind(window);
 
     const wrapped=async function(input,init){
@@ -71,6 +71,14 @@
         return jsonResponse({...validation,attempted:false,battle_resolved:false});
       }
 
+      // A qualifying workout no longer opens the battle automatically. Expose
+      // the validated workout to the preview UI and let the player start the
+      // existing battle explicitly from the Wild Pokémon block.
+      if(!body.manual_catch){
+        window.dispatchEvent(new CustomEvent('obd-wild-catch-ready',{detail:{body:{...body},validation}}));
+        return jsonResponse({...validation,attempted:false,battle_resolved:false,catch_ready:true});
+      }
+
       const response=await upstream(PREVIEW_WILD,init);
       try{
         const data=await response.clone().json();
@@ -83,7 +91,7 @@
       return response;
     };
 
-    wrapped.__obdWildCooldownPreviewFinalV4=true;
+    wrapped.__obdWildCooldownPreviewFinalV5=true;
     wrapped.__obdWildCooldownUpstream=current;
     window.fetch=wrapped;
   }
