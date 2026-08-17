@@ -91,6 +91,42 @@
     playerBecameAvailable();
   }
 
+  function ensureWildRefreshHintStyle(){
+    if(document.getElementById('obdWildRefreshHintStyle'))return;
+    const style=document.createElement('style');
+    style.id='obdWildRefreshHintStyle';
+    style.textContent='.wild-refresh-hint{margin-top:4px;color:#ff4b55;font-size:9px;font-weight:1000;font-style:italic;line-height:1.2}';
+    document.head.appendChild(style);
+  }
+
+  function updateWildRefreshHint(){
+    const block=document.getElementById('wildPokemonBlock');
+    if(!block)return;
+    const countdown=block.querySelector('[data-wild-countdown]');
+    const unresolved=countdown&&String(countdown.textContent||'').trim()==='--:--:--';
+    let hint=block.querySelector('.wild-refresh-hint');
+    if(!unresolved){
+      hint?.remove();
+      return;
+    }
+    if(!hint){
+      hint=document.createElement('div');
+      hint.className='wild-refresh-hint';
+      hint.textContent='refresh page to spawn wild pokémon';
+      countdown.insertAdjacentElement('afterend',hint);
+    }
+  }
+
+  function installWildRefreshHint(){
+    ensureWildRefreshHintStyle();
+    const block=document.getElementById('wildPokemonBlock');
+    if(!block||block.dataset.obdRefreshHintObserver==='1')return false;
+    block.dataset.obdRefreshHintObserver='1';
+    new MutationObserver(updateWildRefreshHint).observe(block,{childList:true,subtree:true,characterData:true});
+    updateWildRefreshHint();
+    return true;
+  }
+
   function install(){
     const modal=document.getElementById('bossModal');
     if(!modal||modal.dataset.v2ResetObserver)return false;
@@ -106,11 +142,12 @@
 
   installWildFetchRetry();
   installPlayerReadyObserver();
-  window.addEventListener('obd-auth-ready',()=>{playerBecameAvailable();resetWildKick();scheduleWildKick(180)});
-  window.addEventListener('obd-player-changed',()=>{observedPlayerId='';playerBecameAvailable();resetWildKick();scheduleWildKick(180)});
+  window.addEventListener('obd-auth-ready',()=>{playerBecameAvailable();resetWildKick();scheduleWildKick(180);installWildRefreshHint()});
+  window.addEventListener('obd-player-changed',()=>{observedPlayerId='';playerBecameAvailable();resetWildKick();scheduleWildKick(180);installWildRefreshHint()});
   window.addEventListener('online',()=>{resetWildKick();scheduleWildKick(100)});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){resetWildKick();scheduleWildKick(250)}});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){resetWildKick();scheduleWildKick(250);updateWildRefreshHint()}});
   if(window.obdAuthReady) scheduleWildKick(180);
 
   [0,100,250,600,1200].forEach(ms=>setTimeout(install,ms));
+  [0,100,250,600,1200,2500].forEach(ms=>setTimeout(installWildRefreshHint,ms));
 })();
