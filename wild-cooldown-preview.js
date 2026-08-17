@@ -13,6 +13,17 @@
     return data;
   }
 
+  function refreshAfterClose(body){
+    Promise.resolve().then(()=>freshWild(body)).then(fresh=>{
+      window.__obdWildCooldownLastState=fresh;
+      window.dispatchEvent(new CustomEvent('obd-wild-status-refreshed',{detail:fresh}));
+      window.dispatchEvent(new Event('pageshow'));
+    }).catch(error=>{
+      console.warn('Wild cooldown refresh failed',error);
+      window.dispatchEvent(new Event('pageshow'));
+    });
+  }
+
   window.fetch=async function(input,init){
     let body=null,url='';
     try{
@@ -25,13 +36,14 @@
     try{
       const data=await response.clone().json();
       if(!data?.battle_resolved)return response;
-      const fresh=await freshWild(body);
-      const merged={...data,wild:fresh?.wild||data.wild,benefits:fresh?.benefits||data.benefits,wild_status_refreshed:true};
-      setTimeout(()=>window.dispatchEvent(new Event('pageshow')),120);
-      return new Response(JSON.stringify(merged),{status:response.status,headers:{'Content-Type':'application/json'}});
+      // The battle response already contains the server-side cooldown state.
+      // Return it immediately so OK releases the workout flow without waiting
+      // for an extra status request. Refresh once more asynchronously afterwards.
+      refreshAfterClose(body);
+      return response;
     }catch(error){
-      console.warn('Wild cooldown refresh failed',error);
-      setTimeout(()=>window.dispatchEvent(new Event('pageshow')),180);
+      console.warn('Wild cooldown response parse failed',error);
+      window.dispatchEvent(new Event('pageshow'));
       return response;
     }
   };
