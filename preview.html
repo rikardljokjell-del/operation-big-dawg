@@ -21,11 +21,9 @@
         const coreMarker='<script src="core.js"><\/script>';
         const authMarker='<script src="auth.js"><\/script>';
         if(!html.includes(coreMarker)||!html.includes(authMarker))throw new Error('Preview-hooks mangler i index.html');
-        html=html.replace(coreMarker,'<script src="preview-bootstrap.js?v=5"><\/script>\n  '+coreMarker);
+        html=html.replace(coreMarker,'<script src="preview-bootstrap.js?v=6"><\/script>\n  '+coreMarker);
         html=html.replace(authMarker,authMarker+'\n  <script src="admin-v2-preview.js?v=1"><\/script>\n  <script src="wild-battle-preview.js?v=2"><\/script>\n  <script src="wild-battle-preview-ok-fix.js?v=2"><\/script>');
-        // Load the Wild cooldown guard after every original app script so its
-        // preview routing remains the outermost/authoritative fetch layer.
-        html=html.replace('</body>','  <script src="wild-cooldown-preview.js?v=3"><\/script>\n</body>');
+        html=html.replace('</body>','  <script src="wild-cooldown-preview.js?v=4"><\/script>\n</body>');
         document.open();document.write(html);document.close();
       }catch(error){
         document.body.innerHTML='<div class="loading"><div><strong>Preview kunne ikke startes</strong><small>'+String(error?.message||error)+'</small></div></div>';
