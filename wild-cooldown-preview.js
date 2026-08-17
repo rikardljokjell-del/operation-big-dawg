@@ -57,8 +57,11 @@
         return upstream(PREVIEW_WILD,makeStatusInit(init,body));
       }
 
-      const response=await upstream(input,init);
       const isAttempt=body?.action==='wild_attempt'&&isWildUrl(url)&&!!body?.workout_id;
+      // Route the attempt itself to preview too. The upstream battle wrapper still
+      // sees the request and opens the battle, but its final resolution now has an
+      // explicit preview URL and cannot fall through to production gym-game.
+      const response=await upstream(isAttempt?PREVIEW_WILD:input,init);
       if(!isAttempt)return response;
 
       try{
