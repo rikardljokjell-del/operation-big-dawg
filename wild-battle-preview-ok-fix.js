@@ -20,14 +20,11 @@
 
   document.addEventListener('click',event=>{
     if(!event.target?.closest?.('[data-wbp-ok]'))return;
-    // Let the battle runtime's own OK handler resolve the pending workout flow first.
-    // Then remove the overlay node entirely so no author CSS can keep it visible.
+    // Let the battle runtime's own target click handler resolve first, then
+    // hard-close the modal in the same event turn. No timer / refresh wait.
     queueMicrotask(()=>{
       hardUnlock();
-      setTimeout(()=>{
-        hardUnlock();
-        window.dispatchEvent(new Event('pageshow'));
-      },80);
+      window.dispatchEvent(new Event('pageshow'));
     });
   },true);
 })();
