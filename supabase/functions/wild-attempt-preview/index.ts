@@ -23,6 +23,10 @@ async function gym(id:string){let a=await api(`/gym_player_state?player_id=eq.${
 async function patchGym(id:string,body:Record<string,unknown>){const a=await api(`/gym_player_state?player_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({...body,updated_at:new Date().toISOString()})});return a?.[0]||null}
 async function patchWild(id:string,body:Record<string,unknown>){const a=await api(`/wild_pokemon_state?player_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({...body,updated_at:new Date().toISOString()})});return a?.[0]||null}
 function addHours(date:Date,minHours:number,maxHours:number){const mins=Math.floor((minHours+Math.random()*(maxHours-minHours))*60);return new Date(date.getTime()+mins*60000)}
+async function startCooldown(id:string,w:any,outcome:string,workoutId:string|null,success=false){
+  const pokemonId=Number(w?.pokemon_id||0);
+  return await patchWild(id,{status:'cooldown',pokemon_id:null,expires_at:null,next_spawn_at:addHours(new Date(),3,8).toISOString(),attempt_workout_id:workoutId,last_result_pokemon:pokemonId||w?.last_result_pokemon||null,last_catch_success:success,last_outcome:outcome,version:Number(w?.version||1)+1});
+}
 
 async function benefits(id:string,level:number){
   const r=await fetch(`${U}/functions/v1/gym-game-preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'benefits',player_id:id,level,pin:PIN})});
@@ -45,7 +49,7 @@ function catchChance(base:number,hpRatio:number,turns:number,resolution:string,p
 
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
-  if(req.method==='GET')return out({ok:true,service:'wild-attempt-preview-battle-v3'});
+  if(req.method==='GET')return out({ok:true,service:'wild-attempt-preview-cooldown-v4'});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
   try{
     const b=await req.json(),id=String(b.player_id||''),workoutId=String(b.workout_id||''),level=await levelForPlayer(id);
@@ -55,7 +59,7 @@ Deno.serve(async(req:Request)=>{
     let w=await wild(id);const benefit=await benefits(id,level);
     if(!w||w.status!=='active'||!w.pokemon_id)return out({wild:w,benefits:benefit,attempted:false});
     const now=Date.now(),appeared=new Date(w.appeared_at||0).getTime(),expires=new Date(w.expires_at||0).getTime();
-    if(!appeared||!expires||now>expires)return out({wild:w,benefits:benefit,attempted:false,expired:true});
+    if(!appeared||!expires||now>expires){w=await startCooldown(id,w,'fled',null,false);return out({wild:w,benefits:benefit,attempted:false,expired:true,cooldown_started:true});}
 
     const workouts=await api(`/workouts?id=eq.${encodeURIComponent(workoutId)}&player_id=eq.${encodeURIComponent(id)}&select=id,created_at&limit=1`),workout=workouts?.[0];
     if(!workout)return out({wild:w,benefits:benefit,attempted:false,error:'Workout not found'});
@@ -76,7 +80,7 @@ Deno.serve(async(req:Request)=>{
       await patchGym(id,{owned_pokemon:owned,active_party:party,version:Number(g?.version||1)+1});
     }
     const outcome=fainted?'fainted':playerFainted?'escaped':success?'caught':'missed';
-    w=await patchWild(id,{status:'cooldown',pokemon_id:null,expires_at:null,next_spawn_at:addHours(new Date(),3,8).toISOString(),attempt_workout_id:workout.id,last_result_pokemon:pokemonId,last_catch_success:success,last_outcome:outcome,version:Number(w.version||1)+1});
-    return out({wild:w,benefits:benefit,attempted:true,success,pokemon_id:pokemonId,catch_chance:chance,base_catch_chance:baseChance,resolution,hp_ratio:hpRatio,turns,fainted,player_fainted:playerFainted,registered_at:new Date(registeredAt).toISOString()});
+    w=await startCooldown(id,w,outcome,workout.id,success);
+    return out({wild:w,benefits:benefit,attempted:true,success,pokemon_id:pokemonId,catch_chance:chance,base_catch_chance:baseChance,resolution,hp_ratio:hpRatio,turns,fainted,player_fainted:playerFainted,cooldown_started:true,registered_at:new Date(registeredAt).toISOString()});
   }catch(error){console.error(error);return out({error:'Server error'},500)}
 });
