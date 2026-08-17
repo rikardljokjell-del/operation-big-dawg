@@ -15,6 +15,10 @@
   let rawAchievement=null;
   let allowMovedGymDexAchievement=false;
   let releaseReplay=false;
+  let syncPromise=null;
+  let syncPlayerId='';
+  let syncRetryTimer=null;
+  let syncRetryAttempt=0;
 
   function ensureStyle(){
     if(document.getElementById('starterPokemonProgressionStyle'))return;
@@ -46,6 +50,24 @@
     document.body.dataset.pokemonProgression=unlocked?'unlocked':'locked';
   }
 
+  function resetSyncRetry(){
+    clearTimeout(syncRetryTimer);
+    syncRetryTimer=null;
+    syncRetryAttempt=0;
+  }
+
+  function scheduleSyncRetry(id){
+    if(!id||id!==activeId())return;
+    const delays=[350,900,1800,3500];
+    if(syncRetryAttempt>=delays.length)return;
+    clearTimeout(syncRetryTimer);
+    const delay=delays[syncRetryAttempt++];
+    syncRetryTimer=setTimeout(()=>{
+      syncRetryTimer=null;
+      if(id===activeId())syncStarterUnlock();
+    },delay);
+  }
+
   function installAchievementGuard(){
     if(window.showAchievement?.__obdStarterPokemonProgression)return;
     if(typeof window.showAchievement!=='function')return;
@@ -69,15 +91,30 @@
 
   async function syncStarterUnlock(){
     const id=activeId();
-    if(!id){setUnlocked(false);return}
-    try{
-      const state=await call(STARTER_API,{action:'status',player_id:id});
-      if(id!==activeId())return;
-      setUnlocked(!!state?.completed);
-      if(state?.completed)persistGymDexUnlock();
-    }catch(error){
-      console.warn('Starter progression sync failed',error);
-      if(id===activeId())setUnlocked(false);
+    if(!id){resetSyncRetry();setUnlocked(false);return}
+    if(syncPromise&&syncPlayerId===id)return syncPromise;
+
+    const run=(async()=>{
+      try{
+        const state=await call(STARTER_API,{action:'status',player_id:id});
+        if(id!==activeId())return;
+        resetSyncRetry();
+        setUnlocked(!!state?.completed);
+        if(state?.completed)persistGymDexUnlock();
+      }catch(error){
+        if(id!==activeId())return;
+        console.warn('Starter progression sync failed',error);
+        // A temporary/late request failure must never undo a known-good unlock.
+        // Keep the current state and retry shortly instead.
+        scheduleSyncRetry(id);
+      }
+    })();
+
+    syncPromise=run;
+    syncPlayerId=id;
+    try{return await run}
+    finally{
+      if(syncPromise===run){syncPromise=null;syncPlayerId=''}
     }
   }
 
@@ -179,10 +216,12 @@
   const legacyObserver=new MutationObserver(suppressLegacyGymDexIntro);
   legacyObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
 
-  window.addEventListener('obd-auth-ready',()=>setTimeout(syncStarterUnlock,140));
-  window.addEventListener('obd-player-changed',()=>{unlockBusy=false;setUnlocked(false);setTimeout(syncStarterUnlock,100)});
-  window.addEventListener('pageshow',()=>setTimeout(syncStarterUnlock,180));
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(syncStarterUnlock,100)});
+  window.addEventListener('obd-auth-ready',()=>{resetSyncRetry();setTimeout(syncStarterUnlock,0)});
+  window.addEventListener('obd-player-changed',()=>{unlockBusy=false;resetSyncRetry();setUnlocked(false);setTimeout(syncStarterUnlock,80)});
+  window.addEventListener('pageshow',()=>setTimeout(syncStarterUnlock,120));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(syncStarterUnlock,80)});
+  window.addEventListener('online',()=>{resetSyncRetry();syncStarterUnlock()});
 
+  if(window.obdAuthReady&&activeId())setTimeout(syncStarterUnlock,0);
   [0,80,220,600].forEach(ms=>setTimeout(()=>{installAchievementGuard();if(ms>=220)syncStarterUnlock()},ms));
 })();
