@@ -39,6 +39,8 @@
 
   let wildKickAttempt=0;
   let wildKickTimer=null;
+  let observedPlayerId='';
+
   function resetWildKick(){
     clearTimeout(wildKickTimer);
     wildKickTimer=null;
@@ -53,14 +55,40 @@
     const id=window.getSelectedPlayerId?.()||'';
     const block=document.getElementById('wildPokemonBlock');
     const unlocked=document.body.classList.contains('obd-starter-pokemon-unlocked');
-    if(!id||!block||!unlocked)return;
+    if(!id||!block)return;
+
+    // Starter unlock and Wild status are separate requests. If Wild already loaded
+    // while its block was still gated, the countdown will be ready the instant the
+    // starter gate opens. Otherwise keep a short startup retry running.
+    if(!unlocked){scheduleWildKick(180);return}
     if(block.querySelector('[data-wild-countdown]')){wildKickAttempt=0;return}
     if(wildKickAttempt>=3)return;
     wildKickAttempt++;
     // Reuse the runtime's existing pageshow sync hook rather than duplicating
     // Wild state/render logic in this compatibility layer.
     window.dispatchEvent(new Event('pageshow'));
-    scheduleWildKick([900,1500,2600][wildKickAttempt-1]||2600);
+    scheduleWildKick([450,900,1600][wildKickAttempt-1]||1600);
+  }
+
+  function playerBecameAvailable(){
+    const id=window.getSelectedPlayerId?.()||'';
+    if(!id){observedPlayerId='';return}
+    if(id===observedPlayerId)return;
+    observedPlayerId=id;
+    resetWildKick();
+
+    // auth.js sets the selected player before its slower compatibility/auth-ready
+    // tail finishes. Trigger the normal page-resume sync immediately at that point,
+    // so Starter + Wild requests begin in parallel instead of waiting many seconds.
+    window.dispatchEvent(new Event('pageshow'));
+    scheduleWildKick(180);
+  }
+
+  function installPlayerReadyObserver(){
+    if(document.documentElement.dataset.obdWildPlayerObserver==='1')return;
+    document.documentElement.dataset.obdWildPlayerObserver='1';
+    new MutationObserver(playerBecameAvailable).observe(document.documentElement,{attributes:true,attributeFilter:['data-player']});
+    playerBecameAvailable();
   }
 
   function install(){
@@ -77,11 +105,12 @@
   }
 
   installWildFetchRetry();
-  window.addEventListener('obd-auth-ready',()=>{resetWildKick();scheduleWildKick(900)});
-  window.addEventListener('obd-player-changed',()=>{resetWildKick();scheduleWildKick(900)});
-  window.addEventListener('online',()=>{resetWildKick();scheduleWildKick(150)});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){resetWildKick();scheduleWildKick(500)}});
-  if(window.obdAuthReady) scheduleWildKick(900);
+  installPlayerReadyObserver();
+  window.addEventListener('obd-auth-ready',()=>{playerBecameAvailable();resetWildKick();scheduleWildKick(180)});
+  window.addEventListener('obd-player-changed',()=>{observedPlayerId='';playerBecameAvailable();resetWildKick();scheduleWildKick(180)});
+  window.addEventListener('online',()=>{resetWildKick();scheduleWildKick(100)});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){resetWildKick();scheduleWildKick(250)}});
+  if(window.obdAuthReady) scheduleWildKick(180);
 
   [0,100,250,600,1200].forEach(ms=>setTimeout(install,ms));
 })();
