@@ -28,12 +28,24 @@
     }
     return url;
   };
+  const route=(value,body)=>{
+    let url=rewrite(value);
+    try{
+      const action=String(body?.action||'');
+      if(url.includes('/functions/v1/gym-game-preview')&&['wild_status','wild_attempt','wild_validate'].includes(action)){
+        url=url.replace('/functions/v1/gym-game-preview','/functions/v1/wild-attempt-preview');
+      }
+    }catch{}
+    return url;
+  };
+  const bodyFrom=init=>{try{return typeof init?.body==='string'?JSON.parse(init.body):null}catch{return null}};
 
   window.fetch=function(input,init){
     try{
-      if(typeof input==='string')return nativeFetch(rewrite(input),init);
+      const body=bodyFrom(init);
+      if(typeof input==='string')return nativeFetch(route(input,body),init);
       if(input instanceof Request){
-        const next=rewrite(input.url);
+        const next=route(input.url,body);
         if(next!==input.url)return nativeFetch(new Request(next,input),init);
       }
     }catch(error){console.warn('Preview route fallback',error)}
