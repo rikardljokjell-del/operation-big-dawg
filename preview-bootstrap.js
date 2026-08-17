@@ -28,10 +28,9 @@
     }
     return url;
   };
-  const route=value=>{
+  const route=(value,body)=>{
     let url=rewrite(value);
     try{
-      const body=arguments.length>1?arguments[1]:null;
       if(url.includes('/functions/v1/gym-game-preview')&&body?.action==='wild_status'){
         url=url.replace('/functions/v1/gym-game-preview','/functions/v1/wild-status-preview');
       }
