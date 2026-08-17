@@ -8,6 +8,9 @@ const C={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'conte
 const J={...C,'content-type':'application/json'};
 const out=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:J});
 const nums=(v:unknown)=>[...new Set((Array.isArray(v)?v:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=151))];
+const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
+const STRONG=new Set([3,9,26,131,143,148,95,94,93,92,135,133,59,34,31,130,144,145,146,123,141,25,6]);
+const ELITE=new Set([149,150,151]);
 
 async function api(path:string,init:RequestInit={}){
   const r=await fetch(`${U}/rest/v1${path}`,{...init,headers:{...H,...(init.headers||{})}}),text=await r.text();
@@ -28,9 +31,17 @@ async function benefits(id:string,level:number){
   return data.benefits||{};
 }
 
+function rarityPenalty(id:number){return ELITE.has(id)?.12:STRONG.has(id)?.06:0}
+function catchChance(base:number,hpRatio:number,turns:number,resolution:string,pokemonId:number){
+  const safeBase=clamp(Number(base)||.5,.25,1),penalty=rarityPenalty(pokemonId);
+  if(resolution==='auto')return clamp(safeBase*.72-penalty,.30,.78);
+  const turnBonus=Math.min(8,Math.max(0,Number(turns)||0))*.005;
+  return clamp(safeBase*.72-penalty+(1-clamp(hpRatio,0,1))*.48+turnBonus,.30,.95);
+}
+
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
-  if(req.method==='GET')return out({ok:true,service:'wild-attempt-registration-time-v1'});
+  if(req.method==='GET')return out({ok:true,service:'wild-attempt-battle-v3'});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
   try{
     const b=await req.json(),id=String(b.player_id||''),workoutId=String(b.workout_id||''),level=Math.max(1,Math.floor(Number(b.level)||1));
@@ -45,19 +56,24 @@ Deno.serve(async(req:Request)=>{
     const workouts=await api(`/workouts?id=eq.${encodeURIComponent(workoutId)}&player_id=eq.${encodeURIComponent(id)}&select=id,created_at&limit=1`),workout=workouts?.[0];
     if(!workout)return out({wild:w,benefits:benefit,attempted:false,error:'Workout not found'});
     const claims=await api(`/workout_reward_claims?first_workout_id=eq.${encodeURIComponent(workoutId)}&player_id=eq.${encodeURIComponent(id)}&select=first_workout_id,claimed_at&limit=1`),claim=claims?.[0];
-    // Test mode backdates workout.created_at to simulate training days. claimed_at is
-    // the real server time when the workout was registered, so it is the correct
-    // timestamp for deciding whether the player trained during this Wild encounter.
     const registeredAt=new Date(claim?.claimed_at||workout.created_at).getTime();
     if(!registeredAt||registeredAt<appeared||registeredAt>expires)return out({wild:w,benefits:benefit,attempted:false,error:'Workout outside encounter'});
 
-    const pokemonId=Number(w.pokemon_id),chance=Number(benefit?.tiers?.power?.effective_catch)||.5,success=Math.random()<chance;
+    const pokemonId=Number(w.pokemon_id),hasBattleResolution=b.resolution==='battle'||b.resolution==='auto';
+    const resolution=hasBattleResolution?String(b.resolution):'legacy';
+    const turns=resolution==='battle'?clamp(Math.floor(Number(b.turns)||0),0,999):0;
+    const hpRatio=resolution==='battle'?clamp(Number(b.hp_ratio??1),0,1):1;
+    const fainted=resolution==='battle'&&(!!b.fainted||hpRatio<=0),playerFainted=resolution==='battle'&&!!b.player_fainted;
+    const baseChance=Number(benefit?.tiers?.power?.effective_catch)||.5;
+    const chance=fainted||playerFainted?0:resolution==='legacy'?baseChance:catchChance(baseChance,hpRatio,turns,resolution,pokemonId);
+    const success=!fainted&&!playerFainted&&Math.random()<chance;
     if(success){
       const g=await gym(id),owned=[...new Set([...nums(g?.owned_pokemon),pokemonId])].sort((a,b)=>a-b),party=nums(g?.active_party).filter(x=>owned.includes(x)).slice(0,6);
       if(party.length<6&&!party.includes(pokemonId))party.push(pokemonId);
       await patchGym(id,{owned_pokemon:owned,active_party:party,version:Number(g?.version||1)+1});
     }
-    w=await patchWild(id,{status:'cooldown',pokemon_id:null,expires_at:null,next_spawn_at:addHours(new Date(),3,8).toISOString(),attempt_workout_id:workout.id,last_result_pokemon:pokemonId,last_catch_success:success,last_outcome:success?'caught':'missed',version:Number(w.version||1)+1});
-    return out({wild:w,benefits:benefit,attempted:true,success,pokemon_id:pokemonId,catch_chance:chance,registered_at:new Date(registeredAt).toISOString()});
+    const outcome=fainted?'fainted':playerFainted?'escaped':success?'caught':'missed';
+    w=await patchWild(id,{status:'cooldown',pokemon_id:null,expires_at:null,next_spawn_at:addHours(new Date(),3,8).toISOString(),attempt_workout_id:workout.id,last_result_pokemon:pokemonId,last_catch_success:success,last_outcome:outcome,version:Number(w.version||1)+1});
+    return out({wild:w,benefits:benefit,attempted:true,success,pokemon_id:pokemonId,catch_chance:chance,base_catch_chance:baseChance,resolution,hp_ratio:hpRatio,turns,fainted,player_fainted:playerFainted,registered_at:new Date(registeredAt).toISOString()});
   }catch(error){console.error(error);return out({error:'Server error'},500)}
 });
