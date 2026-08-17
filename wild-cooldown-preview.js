@@ -1,7 +1,7 @@
 (()=>{
   if(!window.__OBD_PREVIEW__)return;
-  if(window.__obdWildCooldownPreviewV3)return;
-  window.__obdWildCooldownPreviewV3=true;
+  if(window.__obdWildCooldownPreviewV4)return;
+  window.__obdWildCooldownPreviewV4=true;
 
   const PREVIEW_WILD='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/wild-attempt-preview';
   const PIN='1337';
@@ -21,70 +21,72 @@
     if(when)renderTimer=setInterval(()=>{const node=document.querySelector('[data-wild-cooldown-preview]');if(!node){clearInterval(renderTimer);return}node.textContent=countdown(when)},1000);
   }
 
-  function makeStatusInit(init,body){
+  function makeInit(init,body){
     const headers=new Headers(init?.headers||{});
     if(!headers.has('Content-Type'))headers.set('Content-Type','application/json');
-    return {...(init||{}),method:'POST',headers,body:JSON.stringify({...body,action:'wild_status',pin:body?.pin||PIN})};
+    return {...(init||{}),method:'POST',headers,body:JSON.stringify({...body,pin:body?.pin||PIN})};
   }
+  const jsonResponse=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
 
-  async function freshStatus(upstream,body){
-    const r=await upstream(PREVIEW_WILD,makeStatusInit(null,{player_id:body?.player_id,level:body?.level,pin:body?.pin||PIN}));
+  async function callPreview(upstream,body,init=null){
+    const r=await upstream(PREVIEW_WILD,makeInit(init,body));
     const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={error:text}}
-    if(!r.ok)throw new Error(data.error||text||'Wild status refresh failed');
+    if(!r.ok)throw new Error(data.error||text||'Wild preview request failed');
     return data;
   }
+  async function freshStatus(upstream,body){return await callPreview(upstream,{action:'wild_status',player_id:body?.player_id,level:body?.level,pin:body?.pin||PIN})}
 
   function applyFresh(fresh){
     window.__obdWildCooldownLastState=fresh;
     renderCooldown(fresh?.wild);
     window.dispatchEvent(new CustomEvent('obd-wild-status-refreshed',{detail:fresh}));
-    // pokemon-gameplay-v2 owns its cache. pageshow makes it run syncAll(), and
-    // the final fetch guard below guarantees that syncWild() reads preview state.
     queueMicrotask(()=>window.dispatchEvent(new Event('pageshow')));
   }
 
   function install(){
     const current=window.fetch;
-    if(current?.__obdWildCooldownPreviewFinal)return;
+    if(current?.__obdWildCooldownPreviewFinalV4)return;
     const upstream=current.bind(window);
 
     const wrapped=async function(input,init){
       let body=null,url='';
       try{url=typeof input==='string'?input:String(input?.url||'');body=parseBody(init)}catch{}
 
-      // Make preview Wild status authoritative regardless of other fetch wrappers.
       if(body?.action==='wild_status'&&isWildUrl(url)){
-        return upstream(PREVIEW_WILD,makeStatusInit(init,body));
+        return upstream(PREVIEW_WILD,makeInit(init,{...body,action:'wild_status'}));
       }
 
       const isAttempt=body?.action==='wild_attempt'&&isWildUrl(url)&&!!body?.workout_id;
-      // Route the attempt itself to preview too. The upstream battle wrapper still
-      // sees the request and opens the battle, but its final resolution now has an
-      // explicit preview URL and cannot fall through to production gym-game.
-      const response=await upstream(isAttempt?PREVIEW_WILD:input,init);
-      if(!isAttempt)return response;
+      if(!isAttempt)return upstream(input,init);
 
+      // Critical: do not open the client battle until the server confirms that
+      // this workout was registered after this exact Wild appeared.
+      let validation;
+      try{
+        validation=await callPreview(upstream,{...body,action:'wild_validate'});
+      }catch(error){
+        console.warn('Wild validation failed',error);
+        return jsonResponse({attempted:false,error:String(error?.message||'Wild validation failed')},500);
+      }
+      if(!validation?.eligible){
+        if(validation?.wild?.status==='cooldown')renderCooldown(validation.wild);
+        return jsonResponse({...validation,attempted:false,battle_resolved:false});
+      }
+
+      // Only a validated workout reaches the battle wrapper.
+      const response=await upstream(PREVIEW_WILD,init);
       try{
         const data=await response.clone().json();
         const terminal=!!data?.battle_resolved||!!data?.cooldown_started||data?.wild?.status==='cooldown';
-        if(!terminal)return response;
-
-        // Use the battle response immediately: the menu can switch to cooldown
-        // as soon as OK closes. Then verify once against preview backend without
-        // blocking the result dialog or normal page.
-        renderCooldown(data?.wild);
-        Promise.resolve()
-          .then(()=>freshStatus(upstream,body))
-          .then(applyFresh)
-          .catch(error=>{console.warn('Wild cooldown authoritative refresh failed',error);window.dispatchEvent(new Event('pageshow'))});
-      }catch(error){
-        console.warn('Wild cooldown response parse failed',error);
-        window.dispatchEvent(new Event('pageshow'));
-      }
+        if(terminal){
+          renderCooldown(data?.wild);
+          Promise.resolve().then(()=>freshStatus(upstream,body)).then(applyFresh).catch(error=>{console.warn('Wild cooldown refresh failed',error);window.dispatchEvent(new Event('pageshow'))});
+        }
+      }catch(error){console.warn('Wild cooldown response parse failed',error)}
       return response;
     };
 
-    wrapped.__obdWildCooldownPreviewFinal=true;
+    wrapped.__obdWildCooldownPreviewFinalV4=true;
     wrapped.__obdWildCooldownUpstream=current;
     window.fetch=wrapped;
   }
@@ -94,7 +96,5 @@
   [0,50,250,750,1500,3000].forEach(ms=>setTimeout(install,ms));
   window.addEventListener('pageshow',install,true);
   window.addEventListener('obd-auth-ready',()=>setTimeout(install,0));
-  // If a late-loaded production helper wraps/replaces fetch, reclaim the outer
-  // position so preview status can never fall through to production gym-game.
   setInterval(install,2000);
 })();
