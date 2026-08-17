@@ -20,4 +20,15 @@
     return upstreamFetch(input,init);
   };
   window.fetch.__obdWildAttemptRoute=true;
+
+  // Preview has its own isolated battle runtime. Production loads the tested
+  // battle layer here so it wraps this route and still resolves catches through
+  // the dedicated wild-attempt Edge Function.
+  if(!window.__OBD_PREVIEW__&&!window.__obdWildBattle&&!document.querySelector('script[data-obd-wild-battle]')){
+    const s=document.createElement('script');
+    s.src='wild-battle.js?v=1';
+    s.async=false;
+    s.dataset.obdWildBattle='1';
+    document.head.appendChild(s);
+  }
 })();
