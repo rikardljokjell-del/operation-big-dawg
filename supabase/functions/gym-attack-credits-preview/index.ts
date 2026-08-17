@@ -3,7 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const U=Deno.env.get('SUPABASE_URL')!;
 const K=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PIN=Deno.env.get('APP_PIN')||'1337';
-const CREDIT_CUTOFF='2026-08-17T13:00:00.000Z';
+const CREDIT_CUTOFF='2026-08-17T13:33:00.000Z';
 const H={'apikey':K,'Authorization':`Bearer ${K}`,'Content-Type':'application/json'};
 const C={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type, authorization, apikey','Access-Control-Allow-Methods':'GET, POST, OPTIONS'};
 const J={...C,'content-type':'application/json'};
@@ -56,7 +56,7 @@ async function release(id:string,workoutId:string){
 
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
-  if(req.method==='GET')return out({ok:true,service:'gym-attack-credits-preview',cutoff:CREDIT_CUTOFF});
+  if(req.method==='GET')return out({ok:true,service:'gym-attack-credits-preview-v2',cutoff:CREDIT_CUTOFF});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
   try{
     const b=await req.json();
