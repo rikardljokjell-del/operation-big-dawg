@@ -31,7 +31,8 @@
   const route=(value,body)=>{
     let url=rewrite(value);
     try{
-      if(url.includes('/functions/v1/gym-game-preview')&&body?.action==='wild_status'){
+      const action=String(body?.action||'');
+      if(url.includes('/functions/v1/gym-game-preview')&&['wild_status','wild_attempt','wild_validate'].includes(action)){
         url=url.replace('/functions/v1/gym-game-preview','/functions/v1/wild-attempt-preview');
       }
     }catch{}
