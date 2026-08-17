@@ -22,17 +22,30 @@
   };
   window.fetch.__obdWildAttemptRoute=true;
 
+  function loadManualCatch(){
+    if(window.__OBD_PREVIEW__||window.__obdWildManualCatchProduction||document.querySelector('script[data-obd-wild-manual-catch]'))return;
+    const m=document.createElement('script');
+    m.src='wild-manual-catch.js?v=1';
+    m.async=false;
+    m.dataset.obdWildManualCatch='1';
+    document.head.appendChild(m);
+  }
+
   function loadCooldownGuard(){
-    if(window.__OBD_PREVIEW__||window.__obdWildCooldownProductionV1||document.querySelector('script[data-obd-wild-cooldown]'))return;
+    if(window.__OBD_PREVIEW__)return;
+    if(window.__obdWildCooldownProductionV2){loadManualCatch();return}
+    const existing=document.querySelector('script[data-obd-wild-cooldown]');
+    if(existing){existing.addEventListener('load',loadManualCatch,{once:true});return}
     const g=document.createElement('script');
-    g.src='wild-cooldown.js?v=1';
+    g.src='wild-cooldown.js?v=2';
     g.async=false;
     g.dataset.obdWildCooldown='1';
+    g.addEventListener('load',loadManualCatch,{once:true});
     document.head.appendChild(g);
   }
 
-  // Production loads the battle layer first, then the validation/cooldown guard
-  // as the outermost fetch wrapper. Preview remains fully isolated.
+  // Production loads battle -> validation/cooldown guard -> manual catch UI.
+  // This preserves the tested battle engine while changing only its entry point.
   if(!window.__OBD_PREVIEW__){
     if(window.__obdWildBattle){
       loadCooldownGuard();
