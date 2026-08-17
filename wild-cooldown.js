@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__OBD_PREVIEW__||window.__obdWildCooldownProductionV1)return;
-  window.__obdWildCooldownProductionV1=true;
+  if(window.__OBD_PREVIEW__||window.__obdWildCooldownProductionV2)return;
+  window.__obdWildCooldownProductionV2=true;
 
   const WILD_API='https://uqhwqvqafyrosrakljxt.supabase.co/functions/v1/wild-attempt';
   const PIN='1337';
@@ -44,7 +44,7 @@
 
   function install(){
     const current=window.fetch;
-    if(current?.__obdWildCooldownProductionFinalV1)return;
+    if(current?.__obdWildCooldownProductionFinalV2)return;
     const upstream=current.bind(window);
 
     const wrapped=async function(input,init){
@@ -58,8 +58,6 @@
       const isAttempt=body?.action==='wild_attempt'&&isWildUrl(url)&&!!body?.workout_id;
       if(!isAttempt)return upstream(input,init);
 
-      // Do not open the client battle until the server confirms this workout
-      // belongs to the currently active Wild encounter.
       let validation;
       try{
         validation=await callWild(upstream,{...body,action:'wild_validate'});
@@ -72,7 +70,13 @@
         return jsonResponse({...validation,attempted:false,battle_resolved:false});
       }
 
-      // The captured battle wrapper now receives only server-validated attempts.
+      // A qualifying workout only unlocks the catch action. The battle begins
+      // when the player explicitly taps the Poké Ball in the Wild block.
+      if(!body.manual_catch){
+        window.dispatchEvent(new CustomEvent('obd-wild-catch-ready',{detail:{body:{...body},validation}}));
+        return jsonResponse({...validation,attempted:false,battle_resolved:false,catch_ready:true});
+      }
+
       const response=await upstream(WILD_API,init);
       try{
         const data=await response.clone().json();
@@ -85,7 +89,7 @@
       return response;
     };
 
-    wrapped.__obdWildCooldownProductionFinalV1=true;
+    wrapped.__obdWildCooldownProductionFinalV2=true;
     wrapped.__obdWildCooldownUpstream=current;
     window.fetch=wrapped;
   }
