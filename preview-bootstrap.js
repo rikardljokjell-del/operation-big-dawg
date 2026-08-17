@@ -32,7 +32,7 @@
     let url=rewrite(value);
     try{
       if(url.includes('/functions/v1/gym-game-preview')&&body?.action==='wild_status'){
-        url=url.replace('/functions/v1/gym-game-preview','/functions/v1/wild-status-preview');
+        url=url.replace('/functions/v1/gym-game-preview','/functions/v1/wild-attempt-preview');
       }
     }catch{}
     return url;
