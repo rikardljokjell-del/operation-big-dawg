@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <div class="loading"><div><strong>Laster preview…</strong><small>Admin + reversering av spillbelønninger</small></div></div>
+  <div class="loading"><div><strong>Laster preview…</strong><small>Wild Pokémon battle + admin</small></div></div>
   <script>
     (async()=>{
       try{
@@ -22,7 +22,7 @@
         const authMarker='<script src="auth.js"><\/script>';
         if(!html.includes(coreMarker)||!html.includes(authMarker))throw new Error('Preview-hooks mangler i index.html');
         html=html.replace(coreMarker,'<script src="preview-bootstrap.js?v=4"><\/script>\n  '+coreMarker);
-        html=html.replace(authMarker,authMarker+'\n  <script src="admin-v2-preview.js?v=1"><\/script>');
+        html=html.replace(authMarker,authMarker+'\n  <script src="admin-v2-preview.js?v=1"><\/script>\n  <script src="wild-battle-preview.js?v=2"><\/script>\n  <script src="wild-battle-preview-ok-fix.js?v=1"><\/script>');
         document.open();document.write(html);document.close();
       }catch(error){
         document.body.innerHTML='<div class="loading"><div><strong>Preview kunne ikke startes</strong><small>'+String(error?.message||error)+'</small></div></div>';

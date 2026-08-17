@@ -25,11 +25,15 @@ async function patchWild(id:string,body:Record<string,unknown>){const a=await ap
 function addHours(date:Date,minHours:number,maxHours:number){const mins=Math.floor((minHours+Math.random()*(maxHours-minHours))*60);return new Date(date.getTime()+mins*60000)}
 
 async function benefits(id:string,level:number){
-  const r=await fetch(`${U}/functions/v1/gym-game`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'benefits',player_id:id,level,pin:PIN})});
+  const r=await fetch(`${U}/functions/v1/gym-game-preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'benefits',player_id:id,level,pin:PIN})});
   const text=await r.text();let data:any={};try{data=text?JSON.parse(text):{}}catch{}
   if(!r.ok)throw new Error(data.error||text||'Benefits failed');
   return data.benefits||{};
 }
+function osloDay(ts:string|Date){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Oslo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(ts instanceof Date?ts:new Date(ts)),v:any={};for(const p of parts)if(p.type!=='literal')v[p.type]=p.value;return`${v.year}-${v.month}-${v.day}`}
+function mondayKey(ts:string|Date){const value=osloDay(ts),[y,m,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,m-1,d)),dow=date.getUTCDay()||7;date.setUTCDate(date.getUTCDate()-(dow-1));return date.toISOString().slice(0,10)}
+function shiftDay(value:string,days:number){const [y,m,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,m-1,d+days));return date.toISOString().slice(0,10)}
+async function levelForPlayer(id:string){const rows=await api(`/workouts?player_id=eq.${encodeURIComponent(id)}&select=created_at&order=created_at.asc`);if(!rows?.length)return 1;const weeks=new Map<string,Set<string>>();for(const row of rows){const week=mondayKey(row.created_at),day=osloDay(row.created_at);if(!weeks.has(week))weeks.set(week,new Set());weeks.get(week)!.add(day)}const keys=[...weeks.keys()].sort(),current=mondayKey(new Date()),W=[0,4,7,10,12,13,14,15];let xp=0;for(let week=keys[0];week<=current;week=shiftDay(week,7)){const days=weeks.get(week)?.size||0;xp+=week===current?W[days]:(days?W[days]:-6)}return Math.floor(Math.max(0,xp)/10)+1}
 
 function rarityPenalty(id:number){return ELITE.has(id)?.12:STRONG.has(id)?.06:0}
 function catchChance(base:number,hpRatio:number,turns:number,resolution:string,pokemonId:number){
@@ -41,10 +45,10 @@ function catchChance(base:number,hpRatio:number,turns:number,resolution:string,p
 
 Deno.serve(async(req:Request)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:C});
-  if(req.method==='GET')return out({ok:true,service:'wild-attempt-battle-v3'});
+  if(req.method==='GET')return out({ok:true,service:'wild-attempt-preview-battle-v3'});
   if(req.method!=='POST')return out({error:'Method not allowed'},405);
   try{
-    const b=await req.json(),id=String(b.player_id||''),workoutId=String(b.workout_id||''),level=Math.max(1,Math.floor(Number(b.level)||1));
+    const b=await req.json(),id=String(b.player_id||''),workoutId=String(b.workout_id||''),level=await levelForPlayer(id);
     if(String(b.pin||'')!==PIN)return out({error:'Feil PIN'},403);
     const p=await player(id);if(!p)return out({error:'Spiller finnes ikke'},404);
     if(!p.starter_event_completed_at)return out({locked:true,attempted:false,error:'Wild Pokémon er ikke låst opp'},200);
@@ -59,13 +63,12 @@ Deno.serve(async(req:Request)=>{
     const registeredAt=new Date(claim?.claimed_at||workout.created_at).getTime();
     if(!registeredAt||registeredAt<appeared||registeredAt>expires)return out({wild:w,benefits:benefit,attempted:false,error:'Workout outside encounter'});
 
-    const pokemonId=Number(w.pokemon_id),hasBattleResolution=b.resolution==='battle'||b.resolution==='auto';
-    const resolution=hasBattleResolution?String(b.resolution):'legacy';
+    const pokemonId=Number(w.pokemon_id),resolution=b.resolution==='battle'?'battle':'auto';
     const turns=resolution==='battle'?clamp(Math.floor(Number(b.turns)||0),0,999):0;
     const hpRatio=resolution==='battle'?clamp(Number(b.hp_ratio??1),0,1):1;
     const fainted=resolution==='battle'&&(!!b.fainted||hpRatio<=0),playerFainted=resolution==='battle'&&!!b.player_fainted;
     const baseChance=Number(benefit?.tiers?.power?.effective_catch)||.5;
-    const chance=fainted||playerFainted?0:resolution==='legacy'?baseChance:catchChance(baseChance,hpRatio,turns,resolution,pokemonId);
+    const chance=fainted||playerFainted?0:catchChance(baseChance,hpRatio,turns,resolution,pokemonId);
     const success=!fainted&&!playerFainted&&Math.random()<chance;
     if(success){
       const g=await gym(id),owned=[...new Set([...nums(g?.owned_pokemon),pokemonId])].sort((a,b)=>a-b),party=nums(g?.active_party).filter(x=>owned.includes(x)).slice(0,6);
