@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Operation Big Dawg · Preview</title>
+  <title>Operation Big Dawg · Preview v2</title>
   <style>
     html,body{margin:0;min-height:100%;background:#050b12;color:#fff;font-family:system-ui,sans-serif}
     .loading{min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box}
@@ -11,11 +11,11 @@
   </style>
 </head>
 <body>
-  <div class="loading"><div><strong>Laster preview…</strong><small>Stored Gym attacks + robust Wild catch flow · v2</small></div></div>
+  <div class="loading"><div><strong>Laster preview v2…</strong><small>Freeze fix + robust Wild catch</small></div></div>
   <script>
     (async()=>{
       try{
-        const response=await fetch('/index.html?preview-source=1',{cache:'no-store'});
+        const response=await fetch('./index.html?preview-source=1',{cache:'no-store'});
         if(!response.ok)throw new Error('Kunne ikke laste index.html');
         let html=await response.text();
         const coreMarker='<script src="core.js"><\/script>';
